@@ -43,7 +43,7 @@ TEST_SELF_EMAIL=your-test-email@example.com
 
 ### 4. Run the Application
 ```bash
-python src/EmailSender.py
+python src/excel-emailsender.py
 ```
 
 ## Usage
@@ -63,10 +63,7 @@ python src/EmailSender.py
 
 ## Building Executable
 
-Use PyInstaller to create a standalone executable:
-```bash
-pyinstaller "Excel EmailSender.spec"
-```
+You can create a standalone executable using PyInstaller when needed.
 
 ## License
 
