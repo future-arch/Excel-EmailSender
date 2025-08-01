@@ -1,0 +1,29 @@
+# Environment variables
+.env
+
+# Token cache
+token_cache.json
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+.Python
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# IDE files  
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Log files
+*.log
