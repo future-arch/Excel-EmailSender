@@ -341,6 +341,8 @@ class GroupSelectionDialog(QDialog):
         
         self.accept()
 
+SETTINGS_FILE = "settings.json"
+
 class MailerApp(QWidget):
     def __init__(self):
         super().__init__()
@@ -360,7 +362,53 @@ class MailerApp(QWidget):
             CLIENT_ID, authority=f"https://login.microsoftonline.com/{TENANT_ID}",
             token_cache=self.token_cache
         )
+        self._load_settings()
         self._build_ui()
+
+    def _load_settings(self):
+        if os.path.exists(SETTINGS_FILE):
+            try:
+                with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
+                    self.settings = json.load(f)
+            except (json.JSONDecodeError, IOError) as e:
+                print(f"Error loading settings: {e}")
+                self.settings = {"theme": "Light"}
+        else:
+            self.settings = {"theme": "Light"}
+
+    def _save_settings(self):
+        try:
+            with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
+                json.dump(self.settings, f, indent=4)
+        except IOError as e:
+            print(f"Error saving settings: {e}")
+
+    def set_theme(self, theme):
+        if theme == "Dark":
+            self.settings["theme"] = "Dark"
+            app.setStyle("Fusion")
+            dark_palette = QPalette()
+            dark_palette.setColor(QPalette.ColorRole.Window, QColor(53, 53, 53))
+            dark_palette.setColor(QPalette.ColorRole.WindowText, Qt.GlobalColor.white)
+            dark_palette.setColor(QPalette.ColorRole.Base, QColor(25, 25, 25))
+            dark_palette.setColor(QPalette.ColorRole.AlternateBase, QColor(53, 53, 53))
+            dark_palette.setColor(QPalette.ColorRole.ToolTipBase, Qt.GlobalColor.white)
+            dark_palette.setColor(QPalette.ColorRole.ToolTipText, Qt.GlobalColor.white)
+            dark_palette.setColor(QPalette.ColorRole.Text, Qt.GlobalColor.white)
+            dark_palette.setColor(QPalette.ColorRole.Button, QColor(53, 53, 53))
+            dark_palette.setColor(QPalette.ColorRole.ButtonText, Qt.GlobalColor.white)
+            dark_palette.setColor(QPalette.ColorRole.BrightText, Qt.GlobalColor.red)
+            dark_palette.setColor(QPalette.ColorRole.Link, QColor(42, 130, 218))
+            dark_palette.setColor(QPalette.ColorRole.Highlight, QColor(42, 130, 218))
+            dark_palette.setColor(QPalette.ColorRole.HighlightedText, Qt.GlobalColor.black)
+            app.setPalette(dark_palette)
+            app.setStyleSheet("QToolTip { color: #ffffff; background-color: #2a82da; border: 1px solid white; } QWidget { font-size: 13px; }")
+        else:
+            self.settings["theme"] = "Light"
+            app.setStyle("Fusion")
+            app.setPalette(QApplication.style().standardPalette())
+            app.setStyleSheet("")
+        self._save_settings()
 
     def _build_ui(self):
         self.setWindowTitle('个性化邮件发送助手')
@@ -372,8 +420,17 @@ class MailerApp(QWidget):
 
         # Excel文件加载
         top = QHBoxLayout(); self.excel_label = QLabel("尚未加载Excel文件")
-        load_btn = QPushButton("1. 加载Excel..."); load_btn.clicked.connect(self.load_excel)
+        load_btn = QPushButton("1A. 加载Excel..."); load_btn.clicked.connect(self.load_excel)
+        
+        theme_combo = QComboBox()
+        theme_combo.addItems(["Light", "Dark"])
+        theme_combo.setCurrentText(self.settings.get("theme", "Light"))
+        theme_combo.currentTextChanged.connect(self.set_theme)
+        
         top.addWidget(load_btn); top.addWidget(self.excel_label, 1)
+        top.addStretch()
+        top.addWidget(QLabel("Theme:"))
+        top.addWidget(theme_combo)
         main.addLayout(top); main.addWidget(self._sep())
         
         # Microsoft 365 群组选择 (新增)
@@ -920,9 +977,7 @@ class MailerApp(QWidget):
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     
-    app.setStyle("Fusion")
-    dark_palette = QPalette(); dark_palette.setColor(QPalette.ColorRole.Window, QColor(53, 53, 53)); dark_palette.setColor(QPalette.ColorRole.WindowText, Qt.GlobalColor.white); dark_palette.setColor(QPalette.ColorRole.Base, QColor(25, 25, 25)); dark_palette.setColor(QPalette.ColorRole.AlternateBase, QColor(53, 53, 53)); dark_palette.setColor(QPalette.ColorRole.ToolTipBase, Qt.GlobalColor.white); dark_palette.setColor(QPalette.ColorRole.ToolTipText, Qt.GlobalColor.white); dark_palette.setColor(QPalette.ColorRole.Text, Qt.GlobalColor.white); dark_palette.setColor(QPalette.ColorRole.Button, QColor(53, 53, 53)); dark_palette.setColor(QPalette.ColorRole.ButtonText, Qt.GlobalColor.white); dark_palette.setColor(QPalette.ColorRole.BrightText, Qt.GlobalColor.red); dark_palette.setColor(QPalette.ColorRole.Link, QColor(42, 130, 218)); dark_palette.setColor(QPalette.ColorRole.Highlight, QColor(42, 130, 218)); dark_palette.setColor(QPalette.ColorRole.HighlightedText, Qt.GlobalColor.black); app.setPalette(dark_palette); app.setStyleSheet("QToolTip { color: #ffffff; background-color: #2a82da; border: 1px solid white; } QWidget { font-size: 13px; }")
-    
     gui = MailerApp()
+    gui.set_theme(gui.settings.get("theme", "Light"))
     gui.show()
     sys.exit(app.exec())
