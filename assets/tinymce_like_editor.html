@@ -284,9 +284,14 @@
             border-radius: 3px !important;
             font-weight: bold !important;
             border: 1px solid #bbdefb !important;
-            display: inline !important;
-            cursor: pointer !important;
+            display: inline-block !important;
+            cursor: default !important;
             user-select: none !important;
+            -webkit-user-select: none !important;
+            -moz-user-select: none !important;
+            -ms-user-select: none !important;
+            pointer-events: none !important;
+            white-space: nowrap !important;
         }
         
         .variable-field:hover {
@@ -408,6 +413,10 @@
             color: #a5d6a7 !important;
             border-color: #4caf50 !important;
         }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
     </style>
 </head>
 <body>
@@ -523,7 +532,6 @@
                     </optgroup>
                 </select>
                 <button id="previewBtn" onclick="togglePreview()" title="预览邮件内容">👁</button>
-                <button onclick="testPreview()" title="测试预览功能" style="background: orange;">🧪</button>
                 <button onclick="insertEmoji('😊')" title="表情">😊</button>
                 <button onclick="execCommand('removeFormat')" title="清除格式">Tx</button>
                 <button onclick="toggleSource()" title="查看源码">&lt;/&gt;</button>
@@ -797,7 +805,13 @@
                 span.style.borderRadius = '3px';
                 span.style.fontWeight = 'bold';
                 span.style.border = '1px solid #bbdefb';
+                span.style.display = 'inline-block';
+                span.style.userSelect = 'none'; // Prevent text selection inside
+                span.style.cursor = 'default';
                 span.className = 'variable-field';
+                
+                // Make the span non-editable but allow cursor to move around it
+                span.contentEditable = false;
                 
                 // Insert the styled variable
                 const selection = window.getSelection();
@@ -806,7 +820,10 @@
                     range.deleteContents();
                     range.insertNode(span);
                     
-                    // Position cursor after the variable
+                    // Ensure there's always editable space after the variable
+                    ensureEditableSpaceAfter(span);
+                    
+                    // Position cursor after the variable (there should be a space now)
                     range.setStartAfter(span);
                     range.collapse(true);
                     selection.removeAllRanges();
@@ -926,6 +943,11 @@
             console.log(`Preview data keys: ${Object.keys(previewData).join(', ')}`);
             console.log(`Data count: ${Object.keys(previewData).length}`);
             
+            if (Object.keys(previewData).length === 0) {
+                alert('没有可预览的数据。请先加载Excel文件或选择M365群组。');
+                return;
+            }
+            
             const previewBtn = document.getElementById('previewBtn');
             
             if (isPreviewMode) {
@@ -946,72 +968,89 @@
             originalContent = editor.innerHTML;
             console.log('Original content:', originalContent);
             
-            // Method 1: Replace content in variable spans directly
-            const variableSpans = editor.querySelectorAll('.variable-field');
-            console.log(`Found ${variableSpans.length} variable spans`);
+            // Create a copy of the content for preview
+            let previewContent = originalContent;
             
-            let replacementCount = 0;
+            // Replace all variables with their preview values
+            Object.keys(previewData).forEach(key => {
+                const variable = `{{${key}}}`;
+                const value = previewData[key] || `[空值]`;
+                
+                // Create regex that matches the variable in any context
+                // This handles variables in spans, plain text, and any HTML structure
+                const regex = new RegExp(escapeRegExp(variable), 'g');
+                
+                // Count occurrences for debugging
+                const occurrences = (previewContent.match(regex) || []).length;
+                if (occurrences > 0) {
+                    console.log(`Found ${occurrences} occurrences of ${variable}, replacing with: ${value}`);
+                    
+                    // Replace with styled preview value
+                    const replacement = `<span class="preview-value" style="background-color: #e8f5e8; color: #2e7d32; padding: 2px 6px; border-radius: 3px; font-weight: bold; border: 1px solid #a5d6a7; display: inline;">${value}</span>`;
+                    previewContent = previewContent.replace(regex, replacement);
+                }
+            });
+            
+            // Also handle variables that might be in the variable-field spans
+            // Parse the HTML to handle styled variables
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = previewContent;
+            
+            // Find all variable-field spans and replace their content
+            const variableSpans = tempDiv.querySelectorAll('.variable-field');
+            console.log(`Found ${variableSpans.length} variable-field spans`);
+            
             variableSpans.forEach(span => {
                 const spanText = span.textContent;
-                console.log(`Checking span with content: "${spanText}"`);
+                console.log(`Checking variable span: "${spanText}"`);
                 
                 // Extract variable name from {{variableName}} format
                 const match = spanText.match(/^{{(.+)}}$/);
                 if (match) {
                     const variableName = match[1];
-                    console.log(`Found variable: ${variableName}`);
-                    
                     if (previewData.hasOwnProperty(variableName)) {
-                        const value = previewData[variableName] || `[${variableName}]`;
-                        console.log(`Replacing ${spanText} with ${value}`);
+                        const value = previewData[variableName] || `[空值]`;
+                        console.log(`Replacing variable span ${spanText} with ${value}`);
                         
-                        span.textContent = value;
-                        span.className = 'preview-value';
-                        span.style.backgroundColor = '#e8f5e8';
-                        span.style.color = '#2e7d32';
-                        span.style.borderColor = '#a5d6a7';
-                        replacementCount++;
+                        // Replace the entire span with a preview span
+                        const newSpan = document.createElement('span');
+                        newSpan.className = 'preview-value';
+                        newSpan.style.cssText = 'background-color: #e8f5e8; color: #2e7d32; padding: 2px 6px; border-radius: 3px; font-weight: bold; border: 1px solid #a5d6a7; display: inline;';
+                        newSpan.textContent = value;
+                        span.replaceWith(newSpan);
                     } else {
-                        console.log(`No data found for variable: ${variableName}`);
-                        span.textContent = `[${variableName}]`;
+                        // Variable not found in data
+                        span.textContent = `[未知: ${variableName}]`;
                         span.className = 'preview-value';
-                        span.style.backgroundColor = '#ffebee';
-                        span.style.color = '#c62828';
+                        span.style.cssText = 'background-color: #ffebee; color: #c62828; padding: 2px 6px; border-radius: 3px; font-weight: bold; border: 1px solid #ffcdd2; display: inline;';
                     }
                 }
             });
             
-            console.log(`Replaced ${replacementCount} variables`);
+            // Update the editor with the preview content
+            editor.innerHTML = tempDiv.innerHTML;
             
-            // Method 2: Also handle any plain text variables (not in spans)
-            let content = editor.innerHTML;
-            Object.keys(previewData).forEach(key => {
-                const variable = `{{${key}}}`;
-                const value = previewData[key] || `[${key}]`;
-                const regex = new RegExp(escapeRegExp(variable), 'g');
-                if (content.includes(variable)) {
-                    console.log(`Found plain text variable: ${variable}, replacing with: ${value}`);
-                    content = content.replace(regex, `<span class="preview-value" style="background-color: #e8f5e8; color: #2e7d32; padding: 2px 6px; border-radius: 3px; border: 1px solid #a5d6a7;">${value}</span>`);
-                }
-            });
-            
-            if (content !== editor.innerHTML) {
-                editor.innerHTML = content;
-                console.log('Updated editor content with plain text replacements');
-            }
-            
-            // Disable editing
+            // Disable editing in preview mode
             editor.contentEditable = false;
-            editor.style.backgroundColor = '#f8f9fa';
-            editor.style.border = '2px solid #007acc';
+            editor.style.backgroundColor = '#f5f5f5';
+            editor.style.border = '2px solid #4CAF50';
+            editor.style.boxShadow = 'inset 0 0 5px rgba(76, 175, 80, 0.2)';
             
             // Update button
             const previewBtn = document.getElementById('previewBtn');
-            previewBtn.textContent = '📝';
-            previewBtn.title = '退出预览模式';
-            previewBtn.classList.add('active');
+            previewBtn.textContent = '✏️';
+            previewBtn.title = '返回编辑模式';
+            previewBtn.style.background = 'linear-gradient(145deg, #4CAF50 0%, #45a049 100%)';
+            previewBtn.style.color = 'white';
             
             isPreviewMode = true;
+            
+            // Show a notification
+            const notification = document.createElement('div');
+            notification.style.cssText = 'position: absolute; top: 10px; right: 10px; background: #4CAF50; color: white; padding: 8px 16px; border-radius: 4px; font-size: 12px; z-index: 1000; animation: fadeIn 0.3s;';
+            notification.textContent = '预览模式 - 显示实际数据';
+            editor.parentElement.appendChild(notification);
+            setTimeout(() => notification.remove(), 3000);
         }
         
         function exitPreviewMode() {
@@ -1022,35 +1061,29 @@
             editor.contentEditable = true;
             editor.style.backgroundColor = '';
             editor.style.border = '';
+            editor.style.boxShadow = '';
             
             // Update button
             const previewBtn = document.getElementById('previewBtn');
             previewBtn.textContent = '👁';
             previewBtn.title = '预览邮件内容';
-            previewBtn.classList.remove('active');
+            previewBtn.style.background = '';
+            previewBtn.style.color = '';
             
             isPreviewMode = false;
+            
+            // Show a notification
+            const notification = document.createElement('div');
+            notification.style.cssText = 'position: absolute; top: 10px; right: 10px; background: #2196F3; color: white; padding: 8px 16px; border-radius: 4px; font-size: 12px; z-index: 1000; animation: fadeIn 0.3s;';
+            notification.textContent = '编辑模式 - 可以修改内容';
+            editor.parentElement.appendChild(notification);
+            setTimeout(() => notification.remove(), 2000);
         }
         
         function escapeRegExp(string) {
             return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         }
         
-        // Test function to manually test preview with sample data
-        function testPreview() {
-            console.log('Testing preview function...');
-            setPreviewData({
-                '群组名称': '测试团队',
-                '群组描述': '这是一个测试团队',
-                '群组邮箱': 'test@example.com',
-                '姓名': '测试用户',
-                '邮箱': 'testuser@example.com'
-            });
-            enterPreviewMode();
-        }
-        
-        // Make test function available globally
-        window.testPreview = testPreview;
         
         // Ensure cursor is always visible with multiple methods
         setInterval(function() {
@@ -1070,6 +1103,221 @@
             if (editor.innerHTML === '<p><br></p>') {
                 // Keep the paragraph for proper cursor positioning
             }
+        });
+        
+        // Handle clicks on or near variable fields
+        editor.addEventListener('click', function(event) {
+            const target = event.target;
+            
+            // If clicked on a variable field, move cursor to after it
+            if (target.classList && target.classList.contains('variable-field')) {
+                event.preventDefault();
+                
+                const selection = window.getSelection();
+                const range = document.createRange();
+                
+                // Ensure there's always editable space after the variable
+                ensureEditableSpaceAfter(target);
+                
+                // Position cursor after the variable field
+                range.setStartAfter(target);
+                range.collapse(true);
+                
+                selection.removeAllRanges();
+                selection.addRange(range);
+                
+                editor.focus();
+            }
+        });
+        
+        // Function to ensure there's always editable space after a variable field
+        function ensureEditableSpaceAfter(variableField) {
+            const nextSibling = variableField.nextSibling;
+            const parent = variableField.parentNode;
+            
+            // Always ensure there's a space after a variable field for cursor positioning
+            if (!nextSibling || 
+                (nextSibling.nodeType === Node.ELEMENT_NODE && nextSibling.classList && nextSibling.classList.contains('variable-field')) ||
+                (nextSibling.nodeType === Node.TEXT_NODE && nextSibling.textContent.length === 0) ||
+                (nextSibling.nodeType === Node.ELEMENT_NODE && nextSibling.tagName === 'BR')) {
+                
+                // Remove any empty text nodes or BR tags next to the variable field
+                if (nextSibling && 
+                    ((nextSibling.nodeType === Node.TEXT_NODE && nextSibling.textContent.length === 0) ||
+                     (nextSibling.nodeType === Node.ELEMENT_NODE && nextSibling.tagName === 'BR'))) {
+                    nextSibling.remove();
+                }
+                
+                // Add a proper space for cursor positioning
+                const spaceNode = document.createTextNode('\u00A0'); // Non-breaking space to ensure visibility
+                if (variableField.nextSibling) {
+                    parent.insertBefore(spaceNode, variableField.nextSibling);
+                } else {
+                    parent.appendChild(spaceNode);
+                }
+            }
+            
+            // Special handling for variables at the end of their container (first line issue)
+            const isLastInParent = !variableField.nextSibling || 
+                (variableField.nextSibling && variableField.nextSibling.nodeType === Node.TEXT_NODE && 
+                 variableField.nextSibling.textContent.length <= 1);
+            
+            if (isLastInParent) {
+                // Check if the parent is the editor or a paragraph/div within the editor
+                const isAtEndOfContainer = parent === editor || 
+                    (parent.parentNode === editor && parent.tagName && 
+                     ['P', 'DIV', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6'].includes(parent.tagName.toUpperCase()));
+                
+                if (isAtEndOfContainer) {
+                    // Ensure there's always proper space at the end for cursor positioning
+                    let existingSpace = variableField.nextSibling;
+                    
+                    // If there's no space or only a BR, create proper space
+                    if (!existingSpace || 
+                        (existingSpace.nodeType === Node.ELEMENT_NODE && existingSpace.tagName === 'BR') ||
+                        (existingSpace.nodeType === Node.TEXT_NODE && existingSpace.textContent.length === 0)) {
+                        
+                        // Remove BR if present
+                        if (existingSpace && existingSpace.nodeType === Node.ELEMENT_NODE && existingSpace.tagName === 'BR') {
+                            existingSpace.remove();
+                        }
+                        
+                        // Add non-breaking space for reliable cursor positioning
+                        const spaceNode = document.createTextNode('\u00A0');
+                        parent.appendChild(spaceNode);
+                    } else if (existingSpace && existingSpace.nodeType === Node.TEXT_NODE && existingSpace.textContent.length > 0) {
+                        // Ensure the existing text node ends with a space
+                        if (!existingSpace.textContent.endsWith(' ') && !existingSpace.textContent.endsWith('\u00A0')) {
+                            existingSpace.textContent += '\u00A0';
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Handle keyboard navigation around variable fields
+        editor.addEventListener('keydown', function(event) {
+            const selection = window.getSelection();
+            if (selection.rangeCount === 0) return;
+            
+            const range = selection.getRangeAt(0);
+            const startContainer = range.startContainer;
+            
+            // Handle Arrow Right key specifically for end-of-line navigation
+            if (event.key === 'ArrowRight') {
+                const isAtEndOfTextNode = startContainer.nodeType === Node.TEXT_NODE && 
+                    range.startOffset >= startContainer.textContent.length;
+                
+                if (isAtEndOfTextNode) {
+                    const nextSibling = startContainer.nextSibling;
+                    if (nextSibling && nextSibling.classList && nextSibling.classList.contains('variable-field')) {
+                        // Ensure space after this variable field for proper navigation
+                        ensureEditableSpaceAfter(nextSibling);
+                    }
+                }
+            }
+            
+            // If cursor is inside a variable field, move it outside
+            if (startContainer.nodeType === Node.ELEMENT_NODE && 
+                startContainer.classList && 
+                startContainer.classList.contains('variable-field')) {
+                
+                event.preventDefault();
+                const newRange = document.createRange();
+                
+                if (event.key === 'ArrowLeft' || event.key === 'Backspace') {
+                    newRange.setStartBefore(startContainer);
+                } else {
+                    // Ensure there's space after before moving cursor
+                    ensureEditableSpaceAfter(startContainer);
+                    newRange.setStartAfter(startContainer);
+                }
+                
+                newRange.collapse(true);
+                selection.removeAllRanges();
+                selection.addRange(newRange);
+            }
+            
+            // Handle End key or Ctrl+End to ensure cursor can go to actual end
+            if (event.key === 'End' || (event.ctrlKey && event.key === 'End')) {
+                event.preventDefault();
+                
+                // Get the current line/paragraph the cursor is in
+                const currentRange = selection.getRangeAt(0);
+                let currentLine = currentRange.startContainer;
+                
+                // Find the containing paragraph or div
+                while (currentLine && currentLine !== editor && 
+                       (!currentLine.tagName || !['P', 'DIV', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6'].includes(currentLine.tagName.toUpperCase()))) {
+                    currentLine = currentLine.parentNode;
+                }
+                
+                if (!currentLine || currentLine === editor) {
+                    // If no specific line container, use the editor itself
+                    currentLine = editor;
+                }
+                
+                // Find the last node in this line that should be editable
+                let lastNode = currentLine.lastChild;
+                while (lastNode && lastNode.nodeType === Node.ELEMENT_NODE && lastNode.classList && lastNode.classList.contains('variable-field')) {
+                    // If the last node is a variable field, ensure there's space after it
+                    ensureEditableSpaceAfter(lastNode);
+                    lastNode = lastNode.nextSibling || lastNode;
+                }
+                
+                // Set cursor to the very end of the current line
+                const newRange = document.createRange();
+                if (lastNode && lastNode.nodeType === Node.TEXT_NODE) {
+                    newRange.setStart(lastNode, lastNode.textContent.length);
+                } else if (lastNode && lastNode.nodeType === Node.ELEMENT_NODE) {
+                    newRange.setStartAfter(lastNode);
+                } else {
+                    newRange.selectNodeContents(currentLine);
+                    newRange.collapse(false);
+                }
+                
+                selection.removeAllRanges();
+                selection.addRange(newRange);
+            }
+        });
+        
+        // Also handle when users click at the very end of the editor
+        editor.addEventListener('click', function(event) {
+            // Small delay to let the click event complete
+            setTimeout(() => {
+                const selection = window.getSelection();
+                if (selection.rangeCount > 0) {
+                    const range = selection.getRangeAt(0);
+                    
+                    // Check all variable fields and ensure the last ones have proper spacing
+                    const variableFields = editor.querySelectorAll('.variable-field');
+                    variableFields.forEach(field => {
+                        const parent = field.parentNode;
+                        const isLastInParent = !field.nextSibling || 
+                            (field.nextSibling && field.nextSibling.nodeType === Node.TEXT_NODE && 
+                             field.nextSibling.textContent.trim() === '');
+                        
+                        if (isLastInParent) {
+                            ensureEditableSpaceAfter(field);
+                        }
+                    });
+                }
+            }, 10);
+        });
+        
+        // Also ensure proper spacing when the editor content changes
+        editor.addEventListener('input', function() {
+            // Check for variable fields at the end of lines and ensure they have space
+            const variableFields = editor.querySelectorAll('.variable-field');
+            variableFields.forEach(field => {
+                const nextSibling = field.nextSibling;
+                const parent = field.parentNode;
+                
+                // If this variable field is at the end of its line/parent, ensure space
+                if (!nextSibling || (nextSibling.nodeType === Node.TEXT_NODE && nextSibling.textContent === '')) {
+                    ensureEditableSpaceAfter(field);
+                }
+            });
         });
     </script>
 </body>

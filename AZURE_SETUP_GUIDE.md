@@ -4,7 +4,7 @@
 1. 访问 https://portal.azure.com
 2. 搜索"Azure Active Directory" → "App registrations" → "New registration"
 3. 填写：
-   - Name: `Excel EmailSender`
+   - Name: `SmartEmailSender`
    - Supported account types: `Accounts in this organizational directory only`
    - Redirect URI: `Public client/native (mobile & desktop)` → `http://localhost`
 

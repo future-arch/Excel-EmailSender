@@ -232,8 +232,12 @@ class GroupSelectionDialog(QDialog):
             for group in selected_groups:
                 self.selected_recipients.append({
                     'name': group['displayName'],
-                    'email': group['mail'],
-                    'type': 'group'
+                    'email': group['mail'] or group.get('mailNickname', '') + '@' + group.get('mail', '').split('@')[-1] if group.get('mail') else '',
+                    'type': 'group',
+                    'group_name': group['displayName'],
+                    'group_description': group.get('description', ''),
+                    'group_email': group['mail'] or '',
+                    'group_id': group['id']
                 })
         else:
             # 使用群组成员的个人邮箱
@@ -245,7 +249,12 @@ class GroupSelectionDialog(QDialog):
                         'name': member['displayName'],
                         'email': member['email'],
                         'type': 'member',
-                        'group_name': group['displayName']
+                        'group_name': group['displayName'],
+                        'group_description': group.get('description', ''),
+                        'group_email': group['mail'] or '',
+                        'job_title': member.get('jobTitle', ''),
+                        'department': member.get('department', ''),
+                        'member_type': '成员' if not member.get('isOwner') else '所有者'
                     })
         
         self.accept()

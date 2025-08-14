@@ -177,11 +177,38 @@ class TinyMCEEditor(QWidget):
         if preview_data is None:
             preview_data = {}
         
-        print(f"[DEBUG] TinyMCE editor set_preview_data called with: {preview_data}")
+        # Remove debug output to clean up console
+        # print(f"[DEBUG] TinyMCE editor set_preview_data called with {len(preview_data)} variables")
+        # print(f"[DEBUG] Preview data keys: {list(preview_data.keys())}")
         
         # Convert preview data to JavaScript object string
-        data_js = json.dumps(preview_data, ensure_ascii=False)
+        # Ensure all values are strings and handle None values
+        cleaned_data = {}
+        for key, value in preview_data.items():
+            if value is None:
+                cleaned_data[key] = ""
+            else:
+                cleaned_data[key] = str(value)
         
-        script = f"if (typeof setPreviewData === 'function') {{ setPreviewData({data_js}); }}"
-        print(f"[DEBUG] Executing JavaScript: {script}")
+        data_js = json.dumps(cleaned_data, ensure_ascii=False)
+        
+        # Create the script that will set the preview data
+        script = f"""
+        if (typeof setPreviewData === 'function') {{
+            setPreviewData({data_js});
+            console.log('Preview data updated with ' + Object.keys({data_js}).length + ' variables');
+        }} else {{
+            // If function doesn't exist yet, wait and retry
+            setTimeout(function() {{
+                if (typeof setPreviewData === 'function') {{
+                    setPreviewData({data_js});
+                    console.log('Preview data updated with ' + Object.keys({data_js}).length + ' variables (delayed)');
+                }} else {{
+                    console.warn('setPreviewData function still not available');
+                }}
+            }}, 500);
+        }}
+        """
+        
+        # Execute immediately - the script has its own retry logic
         self.web_view.page().runJavaScript(script)

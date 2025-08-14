@@ -1,4 +1,4 @@
-# Excel EmailSender Project
+# SmartEmailSender Project
 
 ## Project Overview
 A professional bulk email sending application that integrates with Microsoft Graph API to send personalized emails using Excel data.
@@ -31,11 +31,11 @@ A professional bulk email sending application that integrates with Microsoft Gra
 ## Project Structure
 ```
 /
-├── src/excel-emailsender.py    # Main application file
+├── src/SmartEmailSender.py    # Main application file
 ├── requirements.txt            # Python dependencies  
 ├── README.md                  # Documentation
 ├── assets/                    # Application icons
-│   └── excel-emailsender.icns
+│   └── SmartEmailSender.icns
 └── data/                      # Data folder (empty)
 ```
 
@@ -83,7 +83,7 @@ Required Microsoft Graph API permissions:
 
 ## Run Command
 ```bash
-python src/excel-emailsender.py
+python src/SmartEmailSender.py
 ```
 
 ## Git Status

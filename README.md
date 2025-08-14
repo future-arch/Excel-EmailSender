@@ -1,4 +1,4 @@
-# Excel EmailSender
+# SmartEmailSender
 
 A professional email sending application that integrates with Microsoft Graph API to send personalized bulk emails using Excel data.
 
@@ -43,7 +43,7 @@ TEST_SELF_EMAIL=your-test-email@example.com
 
 ### 4. Run the Application
 ```bash
-python src/excel-emailsender.py
+python src/SmartEmailSender.py
 ```
 
 ## Usage

@@ -236,8 +236,7 @@ class MailerApp(QWidget):
         # Connect tab change event to update variables
         self.tab_widget.currentChanged.connect(self._on_tab_changed)
         
-        # Initialize preview data
-        self._update_preview_data()
+        # Don't initialize preview data at startup - wait for user action
 
     def _create_excel_tab(self):
         """Create the Excel file tab content"""
@@ -610,11 +609,17 @@ class MailerApp(QWidget):
                     self.group_label.setText(f"已选择 {recipient_count} 个群组邮箱")
                 else:
                     self.group_label.setText(f"已选择 {recipient_count} 位群组成员")
+                
+                # Debug: Print selected recipients to verify data
+                print(f"[DEBUG] Selected {recipient_count} recipients")
+                if self.selected_group_recipients:
+                    print(f"[DEBUG] First recipient: {self.selected_group_recipients[0]}")
             else:
                 self.group_label.setText("未选择群组收件人")
             
-            # Update preview data with group data
-            self._update_preview_data()
+            # Update preview data with group data - add a small delay to ensure data is ready
+            from PySide6.QtCore import QTimer
+            QTimer.singleShot(100, self._update_preview_data)
 
     def _update_preview_data(self):
         """Update preview data for the rich text editor with first instance data based on active tab"""
@@ -642,23 +647,31 @@ class MailerApp(QWidget):
                         # Use first row of filtered data
                         first_row = filtered_df.iloc[0]
                         for col in first_row.index:
-                            preview_data[col] = str(first_row[col]) if first_row[col] else f"[{col}]"
+                            # Handle different data types properly
+                            val = first_row[col]
+                            if pd.isna(val) or val is None or str(val).strip() == '':
+                                preview_data[col] = f"[空-{col}]"
+                            else:
+                                preview_data[col] = str(val)
                         excel_columns = list(self.df.columns)
                     else:
                         # Default Excel placeholders with sample data
                         preview_data.update({
-                            '姓名': '李四',
-                            '邮箱': 'lisi@example.com',
-                            '部门': '市场部',
-                            '职位': '产品经理'
+                            '姓名': '示例姓名',
+                            '邮箱': 'example@email.com',
+                            '部门': '示例部门',
+                            '职位': '示例职位'
                         })
+                        # Still add column names if available
+                        if self.df is not None:
+                            excel_columns = list(self.df.columns)
                 else:
                     # No Excel data loaded, provide sample data
                     preview_data.update({
-                        '姓名': '李四',
-                        '邮箱': 'lisi@example.com',
-                        '部门': '市场部',
-                        '职位': '产品经理'
+                        '姓名': '示例姓名',
+                        '邮箱': 'example@email.com',
+                        '部门': '示例部门',
+                        '职位': '示例职位'
                     })
                     
             elif current_tab == 1:  # Group tab
@@ -666,64 +679,58 @@ class MailerApp(QWidget):
                     # Use first group recipient
                     first_recipient = self.selected_group_recipients[0]
                     
-                    # Use field mapper to map fields properly
+                    # Debug: Print the first recipient to see its structure
+                    print(f"[DEBUG] First recipient data: {first_recipient}")
+                    
+                    # Directly map the fields without using field mapper for now
                     if first_recipient.get('type') == 'group':
-                        # Group email address
-                        mapped_data = self.field_mapper.map_data_to_template_vars({
-                            'displayName': first_recipient.get('group_name', ''),
-                            'description': first_recipient.get('group_description', ''),
-                            'mail': first_recipient.get('group_email', '')
-                        }, 'group')
-                        preview_data.update(mapped_data)
+                        # Group email address - use direct field names
+                        preview_data.update({
+                            '姓名': first_recipient.get('name', ''),
+                            '邮箱': first_recipient.get('email', ''),
+                            '群组名称': first_recipient.get('group_name', ''),
+                            '群组描述': first_recipient.get('group_description', ''),
+                            '群组邮箱': first_recipient.get('group_email', '')
+                        })
                     else:
-                        # Individual member
-                        mapped_data = self.field_mapper.map_data_to_template_vars({
-                            'displayName': first_recipient.get('name', ''),
-                            'mail': first_recipient.get('email', ''),
-                            'jobTitle': first_recipient.get('job_title', ''),
-                            'department': first_recipient.get('department', ''),
-                            'member_type': first_recipient.get('member_type', '成员')
-                        }, 'members')
-                        preview_data.update(mapped_data)
-                        
-                        # Also add group info
-                        group_data = self.field_mapper.map_data_to_template_vars({
-                            'displayName': first_recipient.get('group_name', ''),
-                            'description': first_recipient.get('group_description', ''),
-                            'mail': first_recipient.get('group_email', '')
-                        }, 'group')
-                        preview_data.update(group_data)
+                        # Individual member - use direct field names
+                        preview_data.update({
+                            '姓名': first_recipient.get('name', ''),
+                            '邮箱': first_recipient.get('email', ''),
+                            '群组名称': first_recipient.get('group_name', ''),
+                            '群组描述': first_recipient.get('group_description', ''),
+                            '群组邮箱': first_recipient.get('group_email', ''),
+                            '成员类型': first_recipient.get('member_type', '成员'),
+                            '部门': first_recipient.get('department', ''),
+                            '职位': first_recipient.get('job_title', '')
+                        })
                 else:
                     # No group data selected, provide sample defaults for testing
                     preview_data.update({
-                        '姓名': '张三',
-                        '邮箱': 'zhangsan@example.com',
-                        '群组名称': '技术团队',
-                        '群组描述': '负责产品技术开发的核心团队',
-                        '群组邮箱': 'tech-team@company.com',
+                        '姓名': '示例成员',
+                        '邮箱': 'member@example.com',
+                        '群组名称': '示例群组',
+                        '群组描述': '示例群组描述',
+                        '群组邮箱': 'group@example.com',
                         '成员类型': '成员',
-                        '部门': '技术部',
-                        '职位': '高级工程师'
+                        '部门': '示例部门',
+                        '职位': '示例职位'
                     })
         
         # Update the editor with preview data and variable dropdown
         if hasattr(self, 'body_editor') and self.body_editor:
-            print(f"[DEBUG] Setting preview data: {preview_data}")  # Debug output
             self.body_editor.set_preview_data(preview_data)
             
             # Update variable dropdown based on active tab
             if current_tab == 0:  # Excel tab
                 # Show Excel columns
-                print(f"[DEBUG] Excel tab - updating dropdown with columns: {excel_columns}")
+                # print(f"[DEBUG] Excel tab - updating dropdown with columns: {excel_columns}")
                 self.body_editor.update_variable_dropdown(excel_columns)
             else:  # Group tab
-                # Show configured template variables for groups/members
-                template_vars = self.field_mapper.get_template_variables_for_source('group')
-                template_vars.extend(self.field_mapper.get_template_variables_for_source('members'))
-                # Remove duplicates
-                template_vars = list(set(template_vars))
-                print(f"[DEBUG] Group tab - updating dropdown with variables: {template_vars}")
-                self.body_editor.update_variable_dropdown(template_vars)
+                # Show common group and member variables
+                group_vars = ['姓名', '邮箱', '群组名称', '群组描述', '群组邮箱', '成员类型', '部门', '职位']
+                # print(f"[DEBUG] Group tab - updating dropdown with variables: {group_vars}")
+                self.body_editor.update_variable_dropdown(group_vars)
 
     def add_common_attachment(self):
         files, _ = QFileDialog.getOpenFileNames(self, "选择通用附件"); [self.att_list.addItem(f) for f in files]
