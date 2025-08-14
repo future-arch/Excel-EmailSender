@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+            background: white;
+        }
+        
+        #editor {
+            width: 100%;
+            height: 100vh;
+            border: none;
+            outline: none;
+            padding: 10px;
+            box-sizing: border-box;
+            font-size: 14px;
+            line-height: 1.5;
+            resize: none;
+            caret-color: #000 !important;
+            cursor: text !important;
+        }
+        
+        #editor:focus {
+            outline: none;
+            caret-color: #000 !important;
+        }
+        
+        .toolbar {
+            padding: 8px;
+            border-bottom: 1px solid #ddd;
+            background: #f5f5f5;
+            display: flex;
+            gap: 8px;
+        }
+        
+        .toolbar button {
+            padding: 4px 8px;
+            border: 1px solid #ccc;
+            background: white;
+            cursor: pointer;
+            border-radius: 3px;
+        }
+        
+        .toolbar button:hover {
+            background: #e9e9e9;
+        }
+        
+        .toolbar button.active {
+            background: #007acc;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="toolbar">
+        <button onclick="document.execCommand('bold')"><b>B</b></button>
+        <button onclick="document.execCommand('italic')"><i>I</i></button>
+        <button onclick="document.execCommand('underline')"><u>U</u></button>
+        <button onclick="document.execCommand('insertUnorderedList')">• List</button>
+    </div>
+    <div id="editor" contenteditable="true" placeholder="例如：尊敬的 {{姓名}} 专家，您好！"></div>
+    
+    <script>
+        const editor = document.getElementById('editor');
+        
+        // Focus editor on load
+        window.addEventListener('load', function() {
+            editor.focus();
+        });
+        
+        // Handle content changes
+        editor.addEventListener('input', function() {
+            if (window.pybridge) {
+                window.pybridge.contentChanged(editor.innerHTML);
+            }
+        });
+        
+        // Functions for Python communication
+        function setContent(html) {
+            editor.innerHTML = html;
+        }
+        
+        function getContent() {
+            return editor.innerHTML;
+        }
+        
+        function getPlainText() {
+            return editor.innerText;
+        }
+        
+        function clearContent() {
+            editor.innerHTML = '';
+        }
+        
+        function focusEditor() {
+            editor.focus();
+        }
+        
+        function setTheme(theme) {
+            if (theme === 'dark') {
+                document.body.style.background = '#1e1e1e';
+                document.body.style.color = '#fff';
+                editor.style.background = '#1e1e1e';
+                editor.style.color = '#fff';
+                editor.style.caretColor = '#fff';
+            } else {
+                document.body.style.background = 'white';
+                document.body.style.color = '#000';
+                editor.style.background = 'white';
+                editor.style.color = '#000';
+                editor.style.caretColor = '#000';
+            }
+        }
+        
+        // Ensure cursor is always visible
+        setInterval(function() {
+            if (document.activeElement !== editor) {
+                editor.style.caretColor = '#000';
+            }
+        }, 100);
+    </script>
+</body>
+</html>

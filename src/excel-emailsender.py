@@ -11,6 +11,8 @@ from src.ui.main_window import MailerApp
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     gui = MailerApp()
-    gui.set_theme(gui.settings.get("theme", "Light"))
     gui.show()
+    # Set theme after a delay to ensure TinyMCE is loaded
+    from PySide6.QtCore import QTimer
+    QTimer.singleShot(2000, lambda: gui.set_theme(gui.settings.get("theme", "Light")))
     sys.exit(app.exec())

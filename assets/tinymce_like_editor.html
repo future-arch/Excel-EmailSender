@@ -1,0 +1,1076 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+            background: white;
+        }
+        
+        .editor-container {
+            display: flex;
+            flex-direction: column;
+            height: 300px;
+            position: relative;
+        }
+        
+        .toolbar {
+            padding: 6px 10px;
+            border: 1px solid #e0e0e0;
+            background: linear-gradient(135deg, #f8f9fa 0%, #f1f3f4 100%);
+            display: flex;
+            gap: 3px;
+            flex-wrap: wrap;
+            align-items: center;
+            position: relative;
+            border-radius: 4px 4px 0 0;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            margin: 0;
+            min-height: 40px;
+        }
+        
+        .toolbar-group {
+            display: flex;
+            gap: 2px;
+            margin-right: 8px;
+            padding-right: 8px;
+            border-right: 1px solid #d0d7de;
+            position: relative;
+        }
+        
+        .toolbar-group:last-child {
+            border-right: none;
+        }
+        
+        .toolbar-group::after {
+            content: '';
+            position: absolute;
+            right: -1px;
+            top: 50%;
+            transform: translateY(-50%);
+            height: 20px;
+            width: 1px;
+            background: linear-gradient(to bottom, transparent, #d0d7de, transparent);
+        }
+        
+        .toolbar button {
+            padding: 4px 6px;
+            border: 1px solid #d1d9e0;
+            background: linear-gradient(145deg, #ffffff 0%, #f6f8fa 100%);
+            cursor: pointer;
+            border-radius: 4px;
+            font-size: 11px;
+            min-width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            font-weight: 500;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        }
+        
+        .toolbar button:hover {
+            background: linear-gradient(145deg, #f6f8fa 0%, #eaeef2 100%);
+            border-color: #c7d2fe;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .toolbar button:active {
+            transform: translateY(0);
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+        
+        .toolbar button.active {
+            background: linear-gradient(145deg, #4f46e5 0%, #3730a3 100%);
+            color: white;
+            border-color: #3730a3;
+            box-shadow: 0 2px 4px rgba(79, 70, 229, 0.3);
+        }
+        
+        .toolbar button.active:hover {
+            background: linear-gradient(145deg, #5b21b6 0%, #4c1d95 100%);
+            transform: translateY(-1px);
+            box-shadow: 0 3px 6px rgba(79, 70, 229, 0.4);
+        }
+        
+        .toolbar select {
+            padding: 3px 8px;
+            border: 1px solid #d1d9e0;
+            background: linear-gradient(145deg, #ffffff 0%, #f6f8fa 100%);
+            border-radius: 4px;
+            font-size: 11px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+            min-width: 70px;
+            height: 24px;
+        }
+        
+        /* Make variable dropdown wider */
+        #variableSelect {
+            min-width: 100px;
+        }
+        
+        .toolbar select:hover {
+            border-color: #c7d2fe;
+            background: linear-gradient(145deg, #f6f8fa 0%, #eaeef2 100%);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .toolbar select:focus {
+            outline: none;
+            border-color: #4f46e5;
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+        }
+        
+        /* Color picker styling */
+        .toolbar input[type="color"] {
+            width: 24px;
+            height: 24px;
+            border: 1px solid #d1d9e0;
+            border-radius: 4px;
+            cursor: pointer;
+            background: white;
+            transition: all 0.2s ease;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        }
+        
+        .toolbar input[type="color"]:hover {
+            border-color: #c7d2fe;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        #editor {
+            flex: 1;
+            border: 1px solid #e0e0e0;
+            border-top: none;
+            outline: none;
+            padding: 12px;
+            box-sizing: border-box;
+            font-size: 14px;
+            line-height: 1.6;
+            resize: none;
+            caret-color: #000 !important;
+            cursor: text !important;
+            overflow-y: auto;
+            border-radius: 0 0 4px 4px;
+            background: white;
+            min-height: 180px;
+        }
+        
+        #editor:focus {
+            outline: none;
+            caret-color: #000 !important;
+        }
+        
+        #editor p {
+            margin: 0 0 1em 0;
+        }
+        
+        #editor h1 {
+            font-size: 2em;
+            font-weight: bold;
+            margin: 0.67em 0;
+            line-height: 1.2;
+        }
+        
+        #editor h2 {
+            font-size: 1.5em;
+            font-weight: bold;
+            margin: 0.75em 0;
+            line-height: 1.3;
+        }
+        
+        #editor h3 {
+            font-size: 1.25em;
+            font-weight: bold;
+            margin: 0.83em 0;
+            line-height: 1.4;
+        }
+        
+        #editor h4 {
+            font-size: 1.1em;
+            font-weight: bold;
+            margin: 1em 0;
+        }
+        
+        #editor h5 {
+            font-size: 1em;
+            font-weight: bold;
+            margin: 1.17em 0;
+        }
+        
+        #editor h6 {
+            font-size: 0.85em;
+            font-weight: bold;
+            margin: 1.33em 0;
+        }
+        
+        #editor ul, #editor ol {
+            margin: 1em 0;
+            padding-left: 2em;
+        }
+        
+        #editor blockquote {
+            margin: 1em 40px;
+            padding: 0.5em 1em;
+            border-left: 4px solid #ddd;
+            background: #f9f9f9;
+            font-style: italic;
+        }
+        
+        #editor pre {
+            background: #f4f4f4;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 1em;
+            overflow-x: auto;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.9em;
+        }
+        
+        #editor code {
+            background: #f4f4f4;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            padding: 0.2em 0.4em;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.9em;
+        }
+        
+        #editor table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 1em 0;
+        }
+        
+        #editor table td, #editor table th {
+            border: 1px solid #ddd;
+            padding: 8px 12px;
+            text-align: left;
+        }
+        
+        #editor table th {
+            background: #f5f5f5;
+            font-weight: bold;
+        }
+        
+        #editor hr {
+            border: none;
+            border-top: 1px solid #ddd;
+            margin: 2em 0;
+        }
+        
+        #editor a {
+            color: #007acc;
+            text-decoration: underline;
+        }
+        
+        #editor a:hover {
+            color: #005a9e;
+        }
+        
+        /* Variable field styling */
+        .variable-field {
+            background-color: #e3f2fd !important;
+            color: #1976d2 !important;
+            padding: 2px 6px !important;
+            border-radius: 3px !important;
+            font-weight: bold !important;
+            border: 1px solid #bbdefb !important;
+            display: inline !important;
+            cursor: pointer !important;
+            user-select: none !important;
+        }
+        
+        .variable-field:hover {
+            background-color: #bbdefb !important;
+            border-color: #90caf9 !important;
+        }
+        
+        
+        /* Dark theme */
+        .dark {
+            background: #1e1e1e;
+            color: #fff;
+        }
+        
+        .dark .toolbar {
+            background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
+            border-color: #374151;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .dark #editor {
+            border-color: #374151;
+            background: #1e1e1e;
+        }
+        
+        .dark .toolbar-group {
+            border-color: #4b5563;
+        }
+        
+        .dark .toolbar-group::after {
+            background: linear-gradient(to bottom, transparent, #4b5563, transparent);
+        }
+        
+        .dark .toolbar button {
+            background: linear-gradient(145deg, #374151 0%, #1f2937 100%);
+            color: #f9fafb;
+            border-color: #4b5563;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+        }
+        
+        .dark .toolbar button:hover {
+            background: linear-gradient(145deg, #4b5563 0%, #374151 100%);
+            border-color: #818cf8;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .dark .toolbar button.active {
+            background: linear-gradient(145deg, #6366f1 0%, #4f46e5 100%);
+            color: white;
+            border-color: #4f46e5;
+            box-shadow: 0 2px 4px rgba(99, 102, 241, 0.4);
+        }
+        
+        .dark .toolbar button.active:hover {
+            background: linear-gradient(145deg, #7c3aed 0%, #6d28d9 100%);
+            box-shadow: 0 3px 6px rgba(99, 102, 241, 0.5);
+        }
+        
+        .dark .toolbar select {
+            background: linear-gradient(145deg, #374151 0%, #1f2937 100%);
+            color: #f9fafb;
+            border-color: #4b5563;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+        }
+        
+        .dark .toolbar select:hover {
+            border-color: #818cf8;
+            background: linear-gradient(145deg, #4b5563 0%, #374151 100%);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .dark .toolbar select:focus {
+            border-color: #6366f1;
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+        }
+        
+        .dark .toolbar input[type="color"] {
+            border-color: #4b5563;
+            background: #374151;
+        }
+        
+        .dark .toolbar input[type="color"]:hover {
+            border-color: #818cf8;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .dark #editor {
+            background: #1e1e1e;
+            color: #fff;
+            caret-color: #fff !important;
+        }
+        
+        /* Dark theme variable fields */
+        .dark .variable-field {
+            background-color: #1a237e !important;
+            color: #90caf9 !important;
+            border-color: #3f51b5 !important;
+        }
+        
+        .dark .variable-field:hover {
+            background-color: #283593 !important;
+            border-color: #5c6bc0 !important;
+        }
+        
+        /* Preview value styling */
+        .preview-value {
+            background-color: #e8f5e8 !important;
+            color: #2e7d32 !important;
+            padding: 2px 6px !important;
+            border-radius: 3px !important;
+            font-weight: bold !important;
+            border: 1px solid #a5d6a7 !important;
+            display: inline !important;
+        }
+        
+        /* Dark theme preview values */
+        .dark .preview-value {
+            background-color: #1b5e20 !important;
+            color: #a5d6a7 !important;
+            border-color: #4caf50 !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="editor-container">
+        <div class="toolbar">
+            <div class="toolbar-group">
+                <button onclick="execCommand('undo')" title="撤销">↶</button>
+                <button onclick="execCommand('redo')" title="重做">↷</button>
+            </div>
+            
+            <div class="toolbar-group">
+                <select onchange="formatBlock(this.value)">
+                    <option value="">格式</option>
+                    <option value="p">段落</option>
+                    <option value="h1">标题 1</option>
+                    <option value="h2">标题 2</option>
+                    <option value="h3">标题 3</option>
+                    <option value="h4">标题 4</option>
+                    <option value="h5">标题 5</option>
+                    <option value="h6">标题 6</option>
+                    <option value="blockquote">引用</option>
+                    <option value="pre">代码块</option>
+                </select>
+                
+                <select onchange="changeFontSize(this.value)">
+                    <option value="">字号</option>
+                    <option value="1">10px</option>
+                    <option value="2">12px</option>
+                    <option value="3">14px</option>
+                    <option value="4">16px</option>
+                    <option value="5">18px</option>
+                    <option value="6">24px</option>
+                    <option value="7">32px</option>
+                </select>
+                
+                <select onchange="changeFontFamily(this.value)">
+                    <option value="">字体</option>
+                    <option value="Arial, sans-serif">Arial</option>
+                    <option value="Helvetica, sans-serif">Helvetica</option>
+                    <option value="Times New Roman, serif">Times New Roman</option>
+                    <option value="Georgia, serif">Georgia</option>
+                    <option value="Verdana, sans-serif">Verdana</option>
+                    <option value="Courier New, monospace">Courier New</option>
+                    <option value="'Microsoft YaHei', '微软雅黑', sans-serif">微软雅黑</option>
+                    <option value="'PingFang SC', '苹方', sans-serif">苹方</option>
+                    <option value="'Hiragino Sans GB', '冬青黑体', sans-serif">冬青黑体</option>
+                    <option value="SimSun, '宋体', serif">宋体</option>
+                    <option value="SimHei, '黑体', sans-serif">黑体</option>
+                    <option value="'STHeiti', '华文黑体', sans-serif">华文黑体</option>
+                    <option value="'STSong', '华文宋体', serif">华文宋体</option>
+                    <option value="'STKaiti', '华文楷体', serif">华文楷体</option>
+                    <option value="KaiTi, '楷体', serif">楷体</option>
+                    <option value="FangSong, '仿宋', serif">仿宋</option>
+                </select>
+            </div>
+            
+            <div class="toolbar-group">
+                <button onclick="toggleFormat('bold')" title="粗体"><strong>B</strong></button>
+                <button onclick="toggleFormat('italic')" title="斜体"><em>I</em></button>
+                <button onclick="toggleFormat('underline')" title="下划线"><u>U</u></button>
+                <button onclick="toggleFormat('strikethrough')" title="删除线"><s>S</s></button>
+            </div>
+            
+            <div class="toolbar-group">
+                <button onclick="execCommand('justifyLeft')" title="左对齐">⫷</button>
+                <button onclick="execCommand('justifyCenter')" title="居中">☰</button>
+                <button onclick="execCommand('justifyRight')" title="右对齐">⫸</button>
+            </div>
+            
+            <div class="toolbar-group">
+                <button onclick="execCommand('insertUnorderedList')" title="无序列表">•</button>
+                <button onclick="execCommand('insertOrderedList')" title="有序列表">1.</button>
+                <button onclick="execCommand('outdent')" title="减少缩进">⇤</button>
+                <button onclick="execCommand('indent')" title="增加缩进">⇥</button>
+            </div>
+            
+            <div class="toolbar-group">
+                <input type="color" onchange="changeForeColor(this.value)" title="文字颜色">
+                <input type="color" onchange="changeBackColor(this.value)" title="背景颜色">
+            </div>
+            
+            <div class="toolbar-group">
+                <button onclick="insertLink()" title="插入链接">🔗</button>
+                <button onclick="insertTable()" title="插入表格">⊞</button>
+                <button onclick="execCommand('insertHorizontalRule')" title="分隔线">—</button>
+            </div>
+            
+            <div class="toolbar-group">
+                <select id="variableSelect" onchange="insertVariable(this.value); this.selectedIndex=0;" title="插入变量">
+                    <option value="">插入变量</option>
+                    <optgroup label="基本信息">
+                        <option value="{{姓名}}">{{姓名}} - 收件人姓名</option>
+                        <option value="{{邮箱}}">{{邮箱}} - 收件人邮箱</option>
+                    </optgroup>
+                    <optgroup label="群组信息">
+                        <option value="{{群组名称}}">{{群组名称}} - 群组显示名称</option>
+                        <option value="{{群组描述}}">{{群组描述}} - 群组描述信息</option>
+                        <option value="{{群组邮箱}}">{{群组邮箱}} - 群组邮箱地址</option>
+                    </optgroup>
+                    <optgroup label="成员信息">
+                        <option value="{{成员类型}}">{{成员类型}} - 成员类型(成员/所有者)</option>
+                        <option value="{{部门}}">{{部门}} - 成员所属部门</option>
+                        <option value="{{职位}}">{{职位}} - 成员职位</option>
+                    </optgroup>
+                    <optgroup label="日期时间">
+                        <option value="{{当前日期}}">{{当前日期}} - 今天的日期</option>
+                        <option value="{{当前时间}}">{{当前时间}} - 当前时间</option>
+                        <option value="{{年份}}">{{年份}} - 当前年份</option>
+                        <option value="{{月份}}">{{月份}} - 当前月份</option>
+                    </optgroup>
+                    <optgroup label="Excel列" id="excelColumns" style="display:none;">
+                        <!-- Excel columns will be added dynamically -->
+                    </optgroup>
+                </select>
+                <button id="previewBtn" onclick="togglePreview()" title="预览邮件内容">👁</button>
+                <button onclick="testPreview()" title="测试预览功能" style="background: orange;">🧪</button>
+                <button onclick="insertEmoji('😊')" title="表情">😊</button>
+                <button onclick="execCommand('removeFormat')" title="清除格式">Tx</button>
+                <button onclick="toggleSource()" title="查看源码">&lt;/&gt;</button>
+            </div>
+        </div>
+        
+        <div id="editor" contenteditable="true" placeholder="例如：尊敬的 {{姓名}} 专家，您好！感谢您参与 {{群组名称}} 的讨论。">
+            <p><br></p>
+        </div>
+    </div>
+    
+    <script>
+        const editor = document.getElementById('editor');
+        let isUpdating = false;
+        
+        // Focus editor on load and force cursor
+        window.addEventListener('load', function() {
+            setTimeout(function() {
+                editor.focus();
+                // Force cursor position at start
+                const range = document.createRange();
+                const selection = window.getSelection();
+                range.setStart(editor.firstChild, 0);
+                range.collapse(true);
+                selection.removeAllRanges();
+                selection.addRange(range);
+            }, 100);
+        });
+        
+        // Handle content changes
+        editor.addEventListener('input', function() {
+            if (!isUpdating && window.pybridge) {
+                window.pybridge.contentChanged(editor.innerHTML);
+            }
+            updateToolbarState();
+        });
+        
+        editor.addEventListener('selectionchange', updateToolbarState);
+        editor.addEventListener('keyup', updateToolbarState);
+        editor.addEventListener('mouseup', updateToolbarState);
+        
+        // Command execution
+        function execCommand(command, value = null) {
+            editor.focus();
+            document.execCommand(command, false, value);
+            updateToolbarState();
+            if (window.pybridge) {
+                window.pybridge.contentChanged(editor.innerHTML);
+            }
+        }
+        
+        function toggleFormat(command) {
+            editor.focus();
+            const isActive = document.queryCommandState(command);
+            document.execCommand(command, false, null);
+            updateToolbarState();
+            if (window.pybridge) {
+                window.pybridge.contentChanged(editor.innerHTML);
+            }
+        }
+        
+        function formatBlock(tag) {
+            if (tag) {
+                editor.focus();
+                const selection = window.getSelection();
+                const range = selection.getRangeAt(0);
+                
+                // Get the selected text or current line
+                let selectedText = selection.toString();
+                if (!selectedText) {
+                    // If no selection, select the current line
+                    range.expand('line');
+                    selectedText = range.toString();
+                }
+                
+                // Create new element with the tag
+                const newElement = document.createElement(tag);
+                newElement.textContent = selectedText || '新文本';
+                
+                // Replace selection with new element
+                range.deleteContents();
+                range.insertNode(newElement);
+                
+                // Position cursor after the new element
+                range.setStartAfter(newElement);
+                range.collapse(true);
+                selection.removeAllRanges();
+                selection.addRange(range);
+                
+                updateToolbarState();
+                if (window.pybridge) {
+                    window.pybridge.contentChanged(editor.innerHTML);
+                }
+            }
+        }
+        
+        function changeFontSize(size) {
+            if (size) {
+                editor.focus();
+                // Convert size number to actual pixel values
+                const sizeMap = {
+                    '1': '10px',
+                    '2': '12px', 
+                    '3': '14px',
+                    '4': '16px',
+                    '5': '18px',
+                    '6': '24px',
+                    '7': '32px'
+                };
+                const fontSize = sizeMap[size] || '14px';
+                
+                const selection = window.getSelection();
+                if (selection.rangeCount > 0) {
+                    const range = selection.getRangeAt(0);
+                    if (!range.collapsed) {
+                        // Text is selected
+                        const span = document.createElement('span');
+                        span.style.fontSize = fontSize;
+                        span.appendChild(range.extractContents());
+                        range.insertNode(span);
+                    } else {
+                        // No selection, apply to future text
+                        document.execCommand('fontSize', false, size);
+                    }
+                }
+                updateToolbarState();
+                if (window.pybridge) {
+                    window.pybridge.contentChanged(editor.innerHTML);
+                }
+            }
+        }
+        
+        function changeFontFamily(family) {
+            if (family) {
+                editor.focus();
+                const selection = window.getSelection();
+                if (selection.rangeCount > 0) {
+                    const range = selection.getRangeAt(0);
+                    if (!range.collapsed) {
+                        // Text is selected, wrap it in a span with font-family
+                        const span = document.createElement('span');
+                        span.style.fontFamily = family;
+                        span.appendChild(range.extractContents());
+                        range.insertNode(span);
+                    } else {
+                        // No selection, apply to future text
+                        document.execCommand('fontName', false, family);
+                    }
+                }
+                updateToolbarState();
+                if (window.pybridge) {
+                    window.pybridge.contentChanged(editor.innerHTML);
+                }
+            }
+        }
+        
+        function changeForeColor(color) {
+            editor.focus();
+            const selection = window.getSelection();
+            if (selection.rangeCount > 0) {
+                const range = selection.getRangeAt(0);
+                if (!range.collapsed) {
+                    // Text is selected
+                    const span = document.createElement('span');
+                    span.style.color = color;
+                    span.appendChild(range.extractContents());
+                    range.insertNode(span);
+                } else {
+                    // No selection, apply to future text
+                    document.execCommand('foreColor', false, color);
+                }
+            }
+            updateToolbarState();
+            if (window.pybridge) {
+                window.pybridge.contentChanged(editor.innerHTML);
+            }
+        }
+        
+        function changeBackColor(color) {
+            editor.focus();
+            const selection = window.getSelection();
+            if (selection.rangeCount > 0) {
+                const range = selection.getRangeAt(0);
+                if (!range.collapsed) {
+                    // Text is selected
+                    const span = document.createElement('span');
+                    span.style.backgroundColor = color;
+                    span.appendChild(range.extractContents());
+                    range.insertNode(span);
+                } else {
+                    // No selection, apply to future text
+                    document.execCommand('backColor', false, color);
+                }
+            }
+            updateToolbarState();
+            if (window.pybridge) {
+                window.pybridge.contentChanged(editor.innerHTML);
+            }
+        }
+        
+        function insertLink() {
+            editor.focus();
+            const url = prompt('请输入链接地址:', 'http://');
+            if (url && url !== 'http://') {
+                const text = window.getSelection().toString() || prompt('请输入链接文字:', url);
+                if (text) {
+                    document.execCommand('insertHTML', false, `<a href="${url}" target="_blank">${text}</a>`);
+                    if (window.pybridge) {
+                        window.pybridge.contentChanged(editor.innerHTML);
+                    }
+                }
+            }
+        }
+        
+        function insertTable() {
+            editor.focus();
+            const rows = prompt('行数:', '3');
+            const cols = prompt('列数:', '3');
+            if (rows && cols && rows > 0 && cols > 0) {
+                let tableHTML = '<table>';
+                tableHTML += '<thead><tr>';
+                for (let c = 0; c < cols; c++) {
+                    tableHTML += '<th>标题 ' + (c + 1) + '</th>';
+                }
+                tableHTML += '</tr></thead><tbody>';
+                for (let r = 1; r < rows; r++) {
+                    tableHTML += '<tr>';
+                    for (let c = 0; c < cols; c++) {
+                        tableHTML += '<td>单元格</td>';
+                    }
+                    tableHTML += '</tr>';
+                }
+                tableHTML += '</tbody></table><p><br></p>';
+                document.execCommand('insertHTML', false, tableHTML);
+                if (window.pybridge) {
+                    window.pybridge.contentChanged(editor.innerHTML);
+                }
+            }
+        }
+        
+        let isSourceMode = false;
+        function toggleSource() {
+            if (isSourceMode) {
+                // Switch back to visual mode
+                const sourceContent = editor.textContent;
+                editor.innerHTML = sourceContent;
+                editor.contentEditable = true;
+                isSourceMode = false;
+                document.querySelector('button[onclick="toggleSource()"]').textContent = '</>';
+            } else {
+                // Switch to source mode
+                const htmlContent = editor.innerHTML;
+                editor.textContent = htmlContent;
+                editor.contentEditable = true;
+                isSourceMode = true;
+                document.querySelector('button[onclick="toggleSource()"]').textContent = '👁';
+            }
+            editor.focus();
+        }
+        
+        function insertVariable(variable) {
+            if (variable) {
+                editor.focus();
+                
+                // Create a styled span for the variable
+                const span = document.createElement('span');
+                span.textContent = variable;
+                span.style.backgroundColor = '#e3f2fd';
+                span.style.color = '#1976d2';
+                span.style.padding = '2px 6px';
+                span.style.borderRadius = '3px';
+                span.style.fontWeight = 'bold';
+                span.style.border = '1px solid #bbdefb';
+                span.className = 'variable-field';
+                
+                // Insert the styled variable
+                const selection = window.getSelection();
+                if (selection.rangeCount > 0) {
+                    const range = selection.getRangeAt(0);
+                    range.deleteContents();
+                    range.insertNode(span);
+                    
+                    // Position cursor after the variable
+                    range.setStartAfter(span);
+                    range.collapse(true);
+                    selection.removeAllRanges();
+                    selection.addRange(range);
+                }
+                
+                if (window.pybridge) {
+                    window.pybridge.contentChanged(editor.innerHTML);
+                }
+            }
+        }
+        
+        function insertEmoji(emoji) {
+            editor.focus();
+            document.execCommand('insertText', false, emoji);
+            if (window.pybridge) {
+                window.pybridge.contentChanged(editor.innerHTML);
+            }
+        }
+        
+        function updateToolbarState() {
+            // Update button states based on current selection
+            const commands = ['bold', 'italic', 'underline', 'strikethrough'];
+            commands.forEach(cmd => {
+                const btn = document.querySelector(`button[onclick*="${cmd}"]`);
+                if (btn) {
+                    const isActive = document.queryCommandState(cmd);
+                    btn.classList.toggle('active', isActive);
+                }
+            });
+        }
+        
+        // Functions for Python communication
+        function setContent(html) {
+            isUpdating = true;
+            editor.innerHTML = html || '<p><br></p>';
+            isUpdating = false;
+        }
+        
+        function getContent() {
+            return editor.innerHTML;
+        }
+        
+        function getPlainText() {
+            return editor.innerText || editor.textContent;
+        }
+        
+        function clearContent() {
+            isUpdating = true;
+            editor.innerHTML = '<p><br></p>';
+            isUpdating = false;
+            editor.focus();
+        }
+        
+        function focusEditor() {
+            editor.focus();
+            // Force cursor visibility
+            setTimeout(function() {
+                const range = document.createRange();
+                const selection = window.getSelection();
+                if (editor.firstChild) {
+                    range.setStart(editor.firstChild, 0);
+                    range.collapse(true);
+                    selection.removeAllRanges();
+                    selection.addRange(range);
+                }
+            }, 10);
+        }
+        
+        function setTheme(theme) {
+            if (theme === 'dark') {
+                document.body.classList.add('dark');
+            } else {
+                document.body.classList.remove('dark');
+            }
+        }
+        
+        function updateVariableDropdown(excelColumns) {
+            const select = document.getElementById('variableSelect');
+            const excelGroup = document.getElementById('excelColumns');
+            
+            // Clear existing Excel columns
+            excelGroup.innerHTML = '';
+            
+            if (excelColumns && excelColumns.length > 0) {
+                // Add Excel columns to dropdown
+                excelColumns.forEach(column => {
+                    const option = document.createElement('option');
+                    option.value = `{{${column}}}`;
+                    option.textContent = `{{${column}}} - Excel列`;
+                    excelGroup.appendChild(option);
+                });
+                
+                // Show Excel columns group
+                excelGroup.style.display = 'block';
+            } else {
+                // Hide Excel columns group
+                excelGroup.style.display = 'none';
+            }
+        }
+        
+        // Preview functionality
+        let isPreviewMode = false;
+        let originalContent = '';
+        let previewData = {};
+        
+        function setPreviewData(data) {
+            previewData = data;
+            console.log('Preview data set:', data);
+            // Debug alert to see when data is being set
+            console.log(`setPreviewData called with ${Object.keys(data).length} keys:`, Object.keys(data));
+        }
+        
+        function togglePreview() {
+            console.log('Toggle preview clicked, current mode:', isPreviewMode);
+            console.log('Current preview data:', previewData);
+            console.log(`Preview data keys: ${Object.keys(previewData).join(', ')}`);
+            console.log(`Data count: ${Object.keys(previewData).length}`);
+            
+            const previewBtn = document.getElementById('previewBtn');
+            
+            if (isPreviewMode) {
+                // Switch back to edit mode
+                exitPreviewMode();
+            } else {
+                // Switch to preview mode
+                enterPreviewMode();
+            }
+        }
+        
+        function enterPreviewMode() {
+            console.log('=== ENTERING PREVIEW MODE ===');
+            console.log('Preview data available:', previewData);
+            console.log('Preview data keys:', Object.keys(previewData));
+            
+            // Store original content
+            originalContent = editor.innerHTML;
+            console.log('Original content:', originalContent);
+            
+            // Method 1: Replace content in variable spans directly
+            const variableSpans = editor.querySelectorAll('.variable-field');
+            console.log(`Found ${variableSpans.length} variable spans`);
+            
+            let replacementCount = 0;
+            variableSpans.forEach(span => {
+                const spanText = span.textContent;
+                console.log(`Checking span with content: "${spanText}"`);
+                
+                // Extract variable name from {{variableName}} format
+                const match = spanText.match(/^{{(.+)}}$/);
+                if (match) {
+                    const variableName = match[1];
+                    console.log(`Found variable: ${variableName}`);
+                    
+                    if (previewData.hasOwnProperty(variableName)) {
+                        const value = previewData[variableName] || `[${variableName}]`;
+                        console.log(`Replacing ${spanText} with ${value}`);
+                        
+                        span.textContent = value;
+                        span.className = 'preview-value';
+                        span.style.backgroundColor = '#e8f5e8';
+                        span.style.color = '#2e7d32';
+                        span.style.borderColor = '#a5d6a7';
+                        replacementCount++;
+                    } else {
+                        console.log(`No data found for variable: ${variableName}`);
+                        span.textContent = `[${variableName}]`;
+                        span.className = 'preview-value';
+                        span.style.backgroundColor = '#ffebee';
+                        span.style.color = '#c62828';
+                    }
+                }
+            });
+            
+            console.log(`Replaced ${replacementCount} variables`);
+            
+            // Method 2: Also handle any plain text variables (not in spans)
+            let content = editor.innerHTML;
+            Object.keys(previewData).forEach(key => {
+                const variable = `{{${key}}}`;
+                const value = previewData[key] || `[${key}]`;
+                const regex = new RegExp(escapeRegExp(variable), 'g');
+                if (content.includes(variable)) {
+                    console.log(`Found plain text variable: ${variable}, replacing with: ${value}`);
+                    content = content.replace(regex, `<span class="preview-value" style="background-color: #e8f5e8; color: #2e7d32; padding: 2px 6px; border-radius: 3px; border: 1px solid #a5d6a7;">${value}</span>`);
+                }
+            });
+            
+            if (content !== editor.innerHTML) {
+                editor.innerHTML = content;
+                console.log('Updated editor content with plain text replacements');
+            }
+            
+            // Disable editing
+            editor.contentEditable = false;
+            editor.style.backgroundColor = '#f8f9fa';
+            editor.style.border = '2px solid #007acc';
+            
+            // Update button
+            const previewBtn = document.getElementById('previewBtn');
+            previewBtn.textContent = '📝';
+            previewBtn.title = '退出预览模式';
+            previewBtn.classList.add('active');
+            
+            isPreviewMode = true;
+        }
+        
+        function exitPreviewMode() {
+            // Restore original content
+            editor.innerHTML = originalContent;
+            
+            // Enable editing
+            editor.contentEditable = true;
+            editor.style.backgroundColor = '';
+            editor.style.border = '';
+            
+            // Update button
+            const previewBtn = document.getElementById('previewBtn');
+            previewBtn.textContent = '👁';
+            previewBtn.title = '预览邮件内容';
+            previewBtn.classList.remove('active');
+            
+            isPreviewMode = false;
+        }
+        
+        function escapeRegExp(string) {
+            return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        }
+        
+        // Test function to manually test preview with sample data
+        function testPreview() {
+            console.log('Testing preview function...');
+            setPreviewData({
+                '群组名称': '测试团队',
+                '群组描述': '这是一个测试团队',
+                '群组邮箱': 'test@example.com',
+                '姓名': '测试用户',
+                '邮箱': 'testuser@example.com'
+            });
+            enterPreviewMode();
+        }
+        
+        // Make test function available globally
+        window.testPreview = testPreview;
+        
+        // Ensure cursor is always visible with multiple methods
+        setInterval(function() {
+            if (document.activeElement === editor) {
+                editor.style.caretColor = document.body.classList.contains('dark') ? '#fff' : '#000';
+            }
+        }, 100);
+        
+        // Handle placeholder
+        editor.addEventListener('focus', function() {
+            if (editor.innerHTML === '<p><br></p>' || editor.innerHTML === '') {
+                editor.innerHTML = '<p><br></p>';
+            }
+        });
+        
+        editor.addEventListener('blur', function() {
+            if (editor.innerHTML === '<p><br></p>') {
+                // Keep the paragraph for proper cursor positioning
+            }
+        });
+    </script>
+</body>
+</html>

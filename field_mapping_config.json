@@ -1,0 +1,68 @@
+{
+  "version": "1.0",
+  "mappings": {
+    "excel": {
+      "enabled": true,
+      "auto_detect": true,
+      "column_mappings": {}
+    },
+    "group": {
+      "enabled": true,
+      "available_fields": {
+        "id": "群组 ID",
+        "displayName": "群组名称",
+        "description": "群组描述",
+        "mail": "群组邮箱",
+        "mailNickname": "群组邮箱别名",
+        "createdDateTime": "创建日期",
+        "visibility": "可见性"
+      },
+      "field_mappings": {
+        "群组名称": "displayName",
+        "群组描述": "description",
+        "群组邮箱": "mail"
+      }
+    },
+    "members": {
+      "enabled": true,
+      "available_fields": {
+        "id": "用户 ID",
+        "displayName": "显示名称",
+        "givenName": "名字",
+        "surname": "姓氏",
+        "mail": "邮箱地址",
+        "jobTitle": "职位",
+        "department": "部门",
+        "companyName": "公司",
+        "businessPhones": "办公电话",
+        "mobilePhone": "手机",
+        "officeLocation": "办公地点",
+        "employeeId": "员工 ID",
+        "employeeType": "员工类型",
+        "userPrincipalName": "用户主体名称"
+      },
+      "field_mappings": {
+        "姓名": "displayName",
+        "邮箱": "mail",
+        "职位": "jobTitle",
+        "部门": "department",
+        "成员类型": "_memberType"
+      }
+    }
+  },
+  "template_variables": [
+    "姓名",
+    "邮箱",
+    "群组名称",
+    "群组描述",
+    "群组邮箱",
+    "成员类型",
+    "部门",
+    "职位",
+    "当前日期",
+    "当前时间",
+    "年份",
+    "月份",
+    "ceshi"
+  ]
+}

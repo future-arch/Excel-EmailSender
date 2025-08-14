@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TinyMCE Editor</title>
+    <script src="tinymce/js/tinymce/tinymce.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: transparent;
+        }
+        #editor {
+            width: 100%;
+            height: 100vh;
+            box-sizing: border-box;
+        }
+        .tox-tinymce {
+            border: none !important;
+        }
+        
+        /* Research-based cursor visibility fixes for TinyMCE iframe */
+        .tox-edit-area iframe {
+            caret-color: #000 !important;
+        }
+        
+        .tox-edit-area__iframe {
+            caret-color: #000 !important;
+        }
+        
+        /* Target the mce-content-body inside iframe - TinyMCE specific */
+        .mce-content-body {
+            caret-color: #000 !important;
+            cursor: text !important;
+        }
+        
+        /* Apply to all contenteditable elements inside TinyMCE */
+        [contenteditable="true"] {
+            caret-color: #000 !important;
+            cursor: text !important;
+        }
+        
+        /* Force visibility on iframe body and children */
+        .tox-edit-area iframe body {
+            caret-color: #000 !important;
+            cursor: text !important;
+        }
+        
+        .tox-edit-area iframe body * {
+            caret-color: #000 !important;
+            cursor: text !important;
+        }
+    </style>
+</head>
+<body>
+    <textarea id="editor"></textarea>
+    
+    <script>
+        // Initialize TinyMCE
+        tinymce.init({
+            selector: '#editor',
+            license_key: 'gpl',
+            height: '100%',
+            menubar: false,
+            statusbar: false,
+            plugins: [
+                'advlist', 'autolink', 'lists', 'link', 'image', 'charmap',
+                'anchor', 'searchreplace', 'visualblocks', 'code', 'fullscreen',
+                'insertdatetime', 'media', 'table', 'code', 'help', 'wordcount',
+                'emoticons', 'codesample', 'preview'
+            ],
+            toolbar: 'undo redo | blocks | ' +
+                'bold italic underline strikethrough | alignleft aligncenter ' +
+                'alignright alignjustify | bullist numlist outdent indent | ' +
+                'forecolor backcolor | emoticons | removeformat | help',
+            content_style: 'body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; font-size: 14px; cursor: text; min-height: 300px; padding: 10px; caret-color: #000 !important; border: 1px solid transparent; } * { cursor: text !important; caret-color: #000 !important; } body:focus { outline: none; caret-color: #000 !important; } body::after { content: ""; position: absolute; width: 1px; height: 20px; background: #000; animation: blink 1s infinite; } @keyframes blink { 0%, 50% { opacity: 1; } 51%, 100% { opacity: 0; } }',
+            
+            // Placeholder
+            placeholder: '例如：尊敬的 {{姓名}} 专家，您好！',
+            
+            // Setup callback for communication with Python
+            setup: function(editor) {
+                // When content changes, notify Python
+                editor.on('change keyup', function() {
+                    if (window.pybridge) {
+                        window.pybridge.contentChanged(editor.getContent());
+                    }
+                });
+                
+                // When editor is initialized, focus it and show cursor
+                editor.on('init', function() {
+                    // Research-based cursor visibility solution
+                    function restoreCursorVisibility() {
+                        try {
+                            // Method 1: TinyMCE Selection API approach
+                            const selection = editor.selection;
+                            const range = selection.getRng();
+                            
+                            // Bookmark current position
+                            const bookmark = selection.getBookmark();
+                            
+                            // Force focus with proper sequence
+                            editor.focus();
+                            
+                            // Restore bookmark to maintain cursor position
+                            selection.moveToBookmark(bookmark);
+                            
+                            // Method 2: Direct iframe content styling
+                            const body = editor.getBody();
+                            const doc = editor.getDoc();
+                            
+                            // Apply cursor CSS directly to iframe content
+                            const style = doc.createElement('style');
+                            style.textContent = `
+                                body { caret-color: #000 !important; cursor: text !important; }
+                                * { caret-color: #000 !important; }
+                                [contenteditable] { caret-color: #000 !important; }
+                            `;
+                            doc.head.appendChild(style);
+                            
+                            // Method 3: Force cursor activation with mouseup event (research finding)
+                            const mouseupEvent = new MouseEvent('mouseup', {
+                                bubbles: true,
+                                cancelable: true,
+                                view: window
+                            });
+                            body.dispatchEvent(mouseupEvent);
+                            
+                            // Method 4: Selection manipulation to trigger cursor
+                            if (range) {
+                                selection.setRng(range);
+                                selection.collapse(true);
+                            }
+                            
+                        } catch (e) {
+                            console.log('Cursor restoration failed:', e);
+                        }
+                    }
+                    
+                    // Apply fixes with delays based on research
+                    setTimeout(restoreCursorVisibility, 100);
+                    setTimeout(restoreCursorVisibility, 500);
+                    setTimeout(restoreCursorVisibility, 1000);
+                    
+                    // Monitor for cursor loss and restore
+                    setInterval(function() {
+                        if (!editor.hasFocus()) {
+                            restoreCursorVisibility();
+                        }
+                    }, 2000);
+                });
+                
+                // Store editor reference globally
+                window.tinyEditor = editor;
+            },
+            
+            // Theme
+            skin: window.matchMedia('(prefers-color-scheme: dark)').matches ? 'oxide-dark' : 'oxide',
+            content_css: window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'default'
+        });
+        
+        // Functions to be called from Python
+        function setContent(html) {
+            if (window.tinyEditor) {
+                window.tinyEditor.setContent(html);
+            }
+        }
+        
+        function getContent() {
+            if (window.tinyEditor) {
+                return window.tinyEditor.getContent();
+            }
+            return '';
+        }
+        
+        function getPlainText() {
+            if (window.tinyEditor) {
+                return window.tinyEditor.getContent({format: 'text'});
+            }
+            return '';
+        }
+        
+        function clearContent() {
+            if (window.tinyEditor) {
+                window.tinyEditor.setContent('');
+            }
+        }
+        
+        function focusEditor() {
+            if (window.tinyEditor) {
+                const editor = window.tinyEditor;
+                
+                // Research-based focus approach using mouseup event
+                setTimeout(function() {
+                    editor.focus();
+                    
+                    // Trigger mouseup event for cursor visibility (Stack Overflow solution)
+                    const body = editor.getBody();
+                    const mouseupEvent = new MouseEvent('mouseup', {
+                        bubbles: true,
+                        cancelable: true,
+                        view: window
+                    });
+                    body.dispatchEvent(mouseupEvent);
+                    
+                    // Apply direct cursor styling
+                    body.style.caretColor = '#000';
+                    body.style.cursor = 'text';
+                    
+                }, 10);
+            }
+        }
+        
+        function setTheme(theme) {
+            if (window.tinyEditor) {
+                const isDark = theme === 'dark';
+                const currentContent = window.tinyEditor.getContent();
+                
+                // Reload editor with new theme
+                tinymce.remove();
+                tinymce.init({
+                    selector: '#editor',
+                    license_key: 'gpl',
+                    height: '100%',
+                    menubar: false,
+                    statusbar: false,
+                    plugins: [
+                        'advlist', 'autolink', 'lists', 'link', 'image', 'charmap',
+                        'anchor', 'searchreplace', 'visualblocks', 'code', 'fullscreen',
+                        'insertdatetime', 'media', 'table', 'code', 'help', 'wordcount',
+                        'emoticons', 'codesample', 'preview'
+                    ],
+                    toolbar: 'undo redo | blocks | ' +
+                        'bold italic underline strikethrough | alignleft aligncenter ' +
+                        'alignright alignjustify | bullist numlist outdent indent | ' +
+                        'forecolor backcolor | emoticons | removeformat | help',
+                    content_style: 'body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; font-size: 14px; cursor: text; min-height: 300px; padding: 10px; caret-color: #000 !important; border: 1px solid transparent; } * { cursor: text !important; caret-color: #000 !important; } body:focus { outline: none; caret-color: #000 !important; } body::after { content: ""; position: absolute; width: 1px; height: 20px; background: #000; animation: blink 1s infinite; } @keyframes blink { 0%, 50% { opacity: 1; } 51%, 100% { opacity: 0; } }',
+                    placeholder: '例如：尊敬的 {{姓名}} 专家，您好！',
+                    setup: function(editor) {
+                        editor.on('init', function() {
+                            // Restore content after theme change
+                            editor.setContent(currentContent);
+                        });
+                        editor.on('change keyup', function() {
+                            if (window.pybridge) {
+                                window.pybridge.contentChanged(editor.getContent());
+                            }
+                        });
+                        window.tinyEditor = editor;
+                    },
+                    skin: isDark ? 'oxide-dark' : 'oxide',
+                    content_css: isDark ? 'dark' : 'default'
+                });
+            }
+        }
+    </script>
+</body>
+</html>

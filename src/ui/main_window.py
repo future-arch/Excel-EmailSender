@@ -1,4 +1,5 @@
 import sys, os, time, json, atexit, base64, mimetypes, webbrowser, re
+from datetime import datetime
 import pandas as pd
 import requests, msal
 import jinja2
@@ -6,17 +7,19 @@ from dotenv import load_dotenv
 from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
     QTextEdit, QLineEdit, QFileDialog, QComboBox, QMessageBox, QFrame,
-    QDialog, QProgressBar, QListWidget, QListWidgetItem, QStyle, QColorDialog,
-    QTableWidget, QTableWidgetItem, QHeaderView, QRadioButton, QButtonGroup, QCheckBox
+    QDialog, QProgressBar, QListWidget, QListWidgetItem, QStyle,
+    QTableWidget, QTableWidgetItem, QHeaderView, QRadioButton, QButtonGroup, QCheckBox,
+    QScrollArea, QGroupBox, QTabWidget
 )
 from PySide6.QtCore import QObject, Signal, QThread, Qt
 from PySide6.QtGui import (
-    QFont, QAction, QTextListFormat, QGuiApplication, QPalette, QColor,
-    QFontDatabase, QTextCharFormat, QTextCursor
+    QFont, QGuiApplication, QPalette, QColor
 )
 from src.ui.dialogs import AuthDialog, VerificationDialog, GroupSelectionDialog
+from src.ui.tinymce_editor import TinyMCEEditor
 from src.graph.auth import ensure_token, _save_token_cache
 from src.graph.api import fetch_user_groups, fetch_group_members
+from src.config.field_mapper import FieldMapper
 
 # Load environment variables
 load_dotenv()
@@ -51,6 +54,25 @@ class MailWorker(QObject):
                 to_addr = TEST_SELF_EMAIL if self.test_mode else row[self.email_col]
                 expert_name = row.get(self.name_col, '')
                 context = row.to_dict()
+                
+                # Add datetime variables
+                now = datetime.now()
+                context.update({
+                    '当前日期': now.strftime('%Y年%m月%d日'),
+                    '当前时间': now.strftime('%H:%M:%S'),
+                    '年份': now.strftime('%Y'),
+                    '月份': now.strftime('%m')
+                })
+                
+                # Add group variables if available (they're already in context from row.to_dict())
+                # Just ensure they have default values if not present
+                context.setdefault('群组名称', '')
+                context.setdefault('群组描述', '')
+                context.setdefault('群组邮箱', '')
+                context.setdefault('成员类型', '成员')
+                context.setdefault('部门', '')
+                context.setdefault('职位', '')
+                
                 final_subject, final_body = subject_template.render(context), body_template.render(context)
                 personalized_files = self.personalized_attachments_map.get(expert_name, [])
                 all_attachments = self.common_attachments + personalized_files
@@ -95,6 +117,7 @@ class MailerApp(QWidget):
         self.personalized_attachments_map = {}
         self.user_groups = []
         self.selected_group_recipients = []
+        self.field_mapper = FieldMapper()  # Initialize field mapper
         self.token_cache = msal.SerializableTokenCache()
         if os.path.exists(TOKEN_CACHE_FILE):
             try:
@@ -151,199 +174,258 @@ class MailerApp(QWidget):
             QApplication.instance().setStyle("Fusion")
             QApplication.instance().setPalette(QApplication.style().standardPalette())
             QApplication.instance().setStyleSheet("")
+        
+        # Update TinyMCE editor theme if it exists
+        if hasattr(self, 'body_editor'):
+            self.body_editor.setTheme(theme)
+        
         self._save_settings()
+
 
     def _build_ui(self):
         self.setWindowTitle('个性化邮件发送助手')
-        self.setGeometry(100, 100, 800, 950)
-        main = QVBoxLayout(self)
-
-        self.progress = QProgressBar(); self.progress.setVisible(False); self.progress.setTextVisible(False)
-        main.addWidget(self.progress)
-
-        # Excel文件加载
-        top = QHBoxLayout(); self.excel_label = QLabel("尚未加载Excel文件")
-        load_btn = QPushButton("1A. 加载Excel..."); load_btn.clicked.connect(self.load_excel)
+        # Center window on screen instead of sticking to top
+        self.resize(900, 850)
+        screen = QGuiApplication.primaryScreen().geometry()
+        x = (screen.width() - 900) // 2
+        y = (screen.height() - 850) // 2
+        self.move(x, y)
         
+        # Create main layout
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(5, 5, 5, 5)
+        
+        # Add progress bar at top
+        self.progress = QProgressBar()
+        self.progress.setVisible(False)
+        self.progress.setTextVisible(False)
+        main_layout.addWidget(self.progress)
+        
+        # Add toolbar with field config and theme selector at top
+        toolbar_layout = QHBoxLayout()
+        
+        # Field configuration button
+        config_btn = QPushButton("⚙️ 字段配置")
+        config_btn.setToolTip("配置字段映射关系")
+        config_btn.clicked.connect(self.open_field_config)
+        toolbar_layout.addWidget(config_btn)
+        
+        toolbar_layout.addStretch()
+        
+        # Theme selector
+        toolbar_layout.addWidget(QLabel("Theme:"))
         theme_combo = QComboBox()
         theme_combo.addItems(["Light", "Dark"])
         theme_combo.setCurrentText(self.settings.get("theme", "Light"))
         theme_combo.currentTextChanged.connect(self.set_theme)
+        toolbar_layout.addWidget(theme_combo)
         
-        top.addWidget(load_btn); top.addWidget(self.excel_label, 1)
-        top.addStretch()
-        top.addWidget(QLabel("Theme:"))
-        top.addWidget(theme_combo)
-        main.addLayout(top); main.addWidget(self._sep())
+        main_layout.addLayout(toolbar_layout)
         
-        # Microsoft 365 群组选择 (新增)
-        group_layout = QHBoxLayout()
-        self.group_label = QLabel("未选择群组收件人")
-        group_btn = QPushButton("1B. 选择M365群组收件人..."); group_btn.clicked.connect(self.select_groups)
-        group_layout.addWidget(group_btn); group_layout.addWidget(self.group_label, 1)
-        main.addLayout(group_layout); main.addWidget(self._sep())
+        # Create tab widget
+        self.tab_widget = QTabWidget()
+        main_layout.addWidget(self.tab_widget)
+        
+        # Create tabs
+        self._create_excel_tab()
+        self._create_group_tab()
+        
+        # Add shared email composition area at bottom
+        self._create_email_composition_area(main_layout)
+        
+        # Connect tab change event to update variables
+        self.tab_widget.currentChanged.connect(self._on_tab_changed)
+        
+        # Initialize preview data
+        self._update_preview_data()
 
-        form = QVBoxLayout(); form.setSpacing(10)
+    def _create_excel_tab(self):
+        """Create the Excel file tab content"""
+        excel_widget = QWidget()
+        excel_layout = QVBoxLayout(excel_widget)
+        excel_layout.setSpacing(15)
+        excel_layout.setContentsMargins(10, 10, 10, 10)
         
-        form.addWidget(QLabel("<b>2. 核心信息列</b>"))
-        name_email_layout = QHBoxLayout()
-        self.name_combo = QComboBox(); self.email_combo = QComboBox()
-        name_email_layout.addWidget(QLabel("姓名列:"))
-        name_email_layout.addWidget(self.name_combo, 1)
-        name_email_layout.addWidget(QLabel("邮箱列:"))
-        name_email_layout.addWidget(self.email_combo, 1)
-        form.addLayout(name_email_layout)
-
-        form.addWidget(self._sep())
-        form.addWidget(QLabel("<b>3. 筛选收件人 (选填)</b>"))
+        # Section 1: Excel File Loading
+        file_section = QGroupBox("Excel 文件")
+        file_layout = QVBoxLayout(file_section)
+        
+        file_load_layout = QHBoxLayout()
+        load_btn = QPushButton("加载 Excel 文件...")
+        load_btn.clicked.connect(self.load_excel)
+        self.excel_label = QLabel("尚未加载Excel文件")
+        file_load_layout.addWidget(load_btn)
+        file_load_layout.addWidget(self.excel_label, 1)
+        file_layout.addLayout(file_load_layout)
+        
+        # Column selection
+        column_layout = QHBoxLayout()
+        column_layout.addWidget(QLabel("姓名列:"))
+        self.name_combo = QComboBox()
+        column_layout.addWidget(self.name_combo, 1)
+        column_layout.addWidget(QLabel("邮箱列:"))
+        self.email_combo = QComboBox()
+        column_layout.addWidget(self.email_combo, 1)
+        file_layout.addLayout(column_layout)
+        
+        excel_layout.addWidget(file_section)
+        
+        # Section 2: Filtering
+        filter_section = QGroupBox("筛选收件人 (选填)")
+        filter_layout = QVBoxLayout(filter_section)
+        
         self.filters = []
         for i in range(3):
-            filter_layout = QHBoxLayout()
-            col_combo = QComboBox(); col_combo.addItem("【不筛选】")
-            val_input = QLineEdit(); val_input.setPlaceholderText("在此输入筛选值")
-            filter_layout.addWidget(QLabel(f"筛选条件 {i+1}:"))
-            filter_layout.addWidget(col_combo, 1)
-            filter_layout.addWidget(QLabel("值为"))
-            filter_layout.addWidget(val_input, 1)
-            form.addLayout(filter_layout)
+            filter_row_layout = QHBoxLayout()
+            col_combo = QComboBox()
+            col_combo.addItem("【不筛选】")
+            val_input = QLineEdit()
+            val_input.setPlaceholderText("在此输入筛选值")
+            
+            filter_row_layout.addWidget(QLabel(f"筛选条件 {i+1}:"))
+            filter_row_layout.addWidget(col_combo, 1)
+            filter_row_layout.addWidget(QLabel("值为"))
+            filter_row_layout.addWidget(val_input, 1)
+            filter_layout.addLayout(filter_row_layout)
+            
             self.filters.append((col_combo, val_input))
             col_combo.currentIndexChanged.connect(self.update_filtered_count)
             val_input.textChanged.connect(self.update_filtered_count)
+        
         self.filtered_count_label = QLabel("筛选后将发送给: <b>...</b> 人")
-        form.addWidget(self.filtered_count_label, 0, Qt.AlignmentFlag.AlignRight)
-
-        form.addWidget(self._sep())
-        form.addWidget(QLabel("<b>4. 邮件内容</b>"))
-        form.addWidget(QLabel("邮件主题:"))
-        self.subject_input = QLineEdit(); self.subject_input.setFont(QFont("Arial", 12))
-        form.addWidget(self.subject_input)
-        form.addWidget(QLabel("邮件正文:"))
+        filter_layout.addWidget(self.filtered_count_label, 0, Qt.AlignmentFlag.AlignRight)
         
-        self.body_editor = QTextEdit(); self.body_editor.setFont(QFont("Arial", 12))
+        excel_layout.addWidget(filter_section)
+        excel_layout.addStretch()
+        
+        self.tab_widget.addTab(excel_widget, "从 Excel 文件")
+
+    def _create_group_tab(self):
+        """Create the Microsoft 365 Groups tab content"""
+        group_widget = QWidget()
+        group_layout = QVBoxLayout(group_widget)
+        group_layout.setSpacing(15)
+        group_layout.setContentsMargins(10, 10, 10, 10)
+        
+        # Section 1: Group Selection
+        group_section = QGroupBox("Microsoft 365 群组")
+        group_section_layout = QVBoxLayout(group_section)
+        
+        group_btn_layout = QHBoxLayout()
+        group_btn = QPushButton("选择 Microsoft 365 群组...")
+        group_btn.clicked.connect(self.select_groups)
+        self.group_label = QLabel("未选择群组收件人")
+        group_btn_layout.addWidget(group_btn)
+        group_btn_layout.addWidget(self.group_label, 1)
+        group_section_layout.addLayout(group_btn_layout)
+        
+        group_layout.addWidget(group_section)
+        group_layout.addStretch()
+        
+        self.tab_widget.addTab(group_widget, "从 Microsoft 365 群组")
+
+    def _create_email_composition_area(self, main_layout):
+        """Create the shared email composition area"""
+        composition_frame = QFrame()
+        composition_frame.setFrameStyle(QFrame.Shape.StyledPanel)
+        composition_layout = QVBoxLayout(composition_frame)
+        composition_layout.setSpacing(10)
+        composition_layout.setContentsMargins(10, 10, 10, 10)
+        
+        # Email subject
+        subject_layout = QHBoxLayout()
+        subject_layout.addWidget(QLabel("邮件主题:"))
+        self.subject_input = QLineEdit()
+        self.subject_input.setFont(QFont("Arial", 12))
+        subject_layout.addWidget(self.subject_input)
+        composition_layout.addLayout(subject_layout)
+        
+        # Email body
+        composition_layout.addWidget(QLabel("邮件正文:"))
+        self.body_editor = TinyMCEEditor()
         self.body_editor.setPlaceholderText("例如：尊敬的 {{姓名}} 专家，您好！")
-        self.body_editor.cursorPositionChanged.connect(self._sync_toolbar_state)
+        composition_layout.addWidget(self.body_editor)
         
-        self.toolbar_layout = QHBoxLayout()
-        self._build_toolbar()
-        form.addLayout(self.toolbar_layout)
-        
-        form.addWidget(self.body_editor)
-
-        main.addLayout(form); main.addWidget(self._sep())
+        # Attachments
         attachments_layout = QHBoxLayout()
-        pa_vbox = QVBoxLayout(); pa_vbox.addWidget(QLabel("<b>5. 个性化附件 (按姓名匹配)</b>")); self.pa_folder_label = QLabel("<i>尚未选择文件夹</i>"); pa_vbox.addWidget(self.pa_folder_label); pa_btn_layout = QHBoxLayout(); select_pa_folder_btn = QPushButton("选择文件夹..."); preview_pa_btn = QPushButton("预览匹配结果"); select_pa_folder_btn.clicked.connect(self.select_personalized_folder); preview_pa_btn.clicked.connect(self.preview_matches); pa_btn_layout.addWidget(select_pa_folder_btn); pa_btn_layout.addWidget(preview_pa_btn); pa_btn_layout.addStretch(); pa_vbox.addLayout(pa_btn_layout); attachments_layout.addLayout(pa_vbox)
-        attachments_layout.addWidget(self._vert_sep()); ca_vbox = QVBoxLayout(); ca_vbox.addWidget(QLabel("<b>6. 通用附件 (发送给所有人)</b>")); self.att_list = QListWidget(); self.att_list.setFixedHeight(60); ca_vbox.addWidget(self.att_list); ca_btn_layout = QHBoxLayout(); add_att_btn = QPushButton("添加..."); rm_att_btn = QPushButton("移除"); add_att_btn.clicked.connect(self.add_common_attachment); rm_att_btn.clicked.connect(self.remove_common_attachment); ca_btn_layout.addWidget(add_att_btn); ca_btn_layout.addWidget(rm_att_btn); ca_btn_layout.addStretch(); ca_vbox.addLayout(ca_btn_layout); attachments_layout.addLayout(ca_vbox)
-        main.addLayout(attachments_layout); main.addWidget(self._sep())
-        btn_bar = QHBoxLayout(); self.draft_btn = QPushButton("内部测试(草稿)"); self.test_btn = QPushButton("内部测试(发给自己)"); self.send_btn = QPushButton("!!! 正式发送 !!!"); self.draft_btn.setStyleSheet("background:#DAA520;color:white;border-radius:5px;padding:5px;"); self.test_btn.setStyleSheet("background:#4682B4;color:white;border-radius:5px;padding:5px;"); self.send_btn.setStyleSheet("background:#B22222;color:white;font-weight:bold;border-radius:5px;padding:5px;"); self.draft_btn.clicked.connect(lambda: self.run_process('SAVE_DRAFT', True)); self.test_btn.clicked.connect(lambda: self.run_process('SEND', True)); self.send_btn.clicked.connect(lambda: self.run_process('SEND', False)); btn_bar.addStretch(); btn_bar.addWidget(self.draft_btn); btn_bar.addWidget(self.test_btn); btn_bar.addWidget(self.send_btn); btn_bar.addStretch(); main.addLayout(btn_bar)
+        
+        # Personalized attachments
+        pa_group = QGroupBox("个性化附件 (按姓名匹配)")
+        pa_layout = QVBoxLayout(pa_group)
+        self.pa_folder_label = QLabel("<i>尚未选择文件夹</i>")
+        pa_layout.addWidget(self.pa_folder_label)
+        
+        pa_btn_layout = QHBoxLayout()
+        select_pa_folder_btn = QPushButton("选择文件夹...")
+        preview_pa_btn = QPushButton("预览匹配结果")
+        select_pa_folder_btn.clicked.connect(self.select_personalized_folder)
+        preview_pa_btn.clicked.connect(self.preview_matches)
+        pa_btn_layout.addWidget(select_pa_folder_btn)
+        pa_btn_layout.addWidget(preview_pa_btn)
+        pa_btn_layout.addStretch()
+        pa_layout.addLayout(pa_btn_layout)
+        
+        # Common attachments
+        ca_group = QGroupBox("通用附件 (发送给所有人)")
+        ca_layout = QVBoxLayout(ca_group)
+        self.att_list = QListWidget()
+        self.att_list.setFixedHeight(60)
+        ca_layout.addWidget(self.att_list)
+        
+        ca_btn_layout = QHBoxLayout()
+        add_att_btn = QPushButton("添加...")
+        rm_att_btn = QPushButton("移除")
+        add_att_btn.clicked.connect(self.add_common_attachment)
+        rm_att_btn.clicked.connect(self.remove_common_attachment)
+        ca_btn_layout.addWidget(add_att_btn)
+        ca_btn_layout.addWidget(rm_att_btn)
+        ca_btn_layout.addStretch()
+        ca_layout.addLayout(ca_btn_layout)
+        
+        attachments_layout.addWidget(pa_group)
+        attachments_layout.addWidget(ca_group)
+        composition_layout.addLayout(attachments_layout)
+        
+        # Action buttons
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+        
+        self.draft_btn = QPushButton("内部测试(草稿)")
+        self.test_btn = QPushButton("内部测试(发给自己)")
+        self.send_btn = QPushButton("!!! 正式发送 !!!")
+        
+        self.draft_btn.setStyleSheet("background:#DAA520;color:white;border-radius:5px;padding:8px;")
+        self.test_btn.setStyleSheet("background:#4682B4;color:white;border-radius:5px;padding:8px;")
+        self.send_btn.setStyleSheet("background:#B22222;color:white;font-weight:bold;border-radius:5px;padding:8px;")
+        
+        self.draft_btn.clicked.connect(lambda: self.run_process('SAVE_DRAFT', True))
+        self.test_btn.clicked.connect(lambda: self.run_process('SEND', True))
+        self.send_btn.clicked.connect(lambda: self.run_process('SEND', False))
+        
+        btn_layout.addWidget(self.draft_btn)
+        btn_layout.addWidget(self.test_btn)
+        btn_layout.addWidget(self.send_btn)
+        btn_layout.addStretch()
+        
+        composition_layout.addLayout(btn_layout)
+        main_layout.addWidget(composition_frame)
 
-    def _build_toolbar(self):
-        paste_text_btn = QPushButton("粘贴纯文本"); paste_text_btn.setToolTip("从剪贴板粘贴纯文本，清除所有格式"); paste_text_btn.clicked.connect(self.paste_as_plain_text)
-        self.act_bold = QPushButton("B"); self.act_bold.setCheckable(True); font=self.act_bold.font();font.setBold(True);self.act_bold.setFont(font)
-        self.act_italic = QPushButton("I"); self.act_italic.setCheckable(True); font=self.act_italic.font();font.setItalic(True);self.act_italic.setFont(font)
-        self.act_under = QPushButton("U"); self.act_under.setCheckable(True); font=self.act_under.font();font.setUnderline(True);self.act_under.setFont(font)
-        self.act_bullet = QPushButton("•"); self.act_bullet.setToolTip("项目符号列表")
-        self.font_combo = QComboBox(); self.font_combo.addItems(QFontDatabase.families())
-        self.size_combo = QComboBox(); self.size_combo.addItems([str(s) for s in [8, 9, 10, 11, 12, 14, 16, 18, 24, 36, 48]]); self.size_combo.setCurrentText("12")
-        color_btn = QPushButton("颜色"); color_btn.clicked.connect(self.set_text_color)
-        
-        paste_text_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        self.act_bold.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        self.act_italic.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        self.act_under.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        self.act_bullet.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        color_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        
-        self.font_combo.currentTextChanged.connect(self.set_selection_font_family)
-        self.size_combo.currentTextChanged.connect(self.set_selection_font_size)
-        
-        self.act_bold.toggled.connect(self.toggle_bold)
-        self.act_italic.toggled.connect(self.toggle_italic)
-        self.act_under.toggled.connect(self.toggle_underline)
-
-        self.act_bullet.clicked.connect(self._insert_bullet)
-        
-        for btn in [paste_text_btn, self.act_bold, self.act_italic, self.act_under, self.act_bullet]:
-            btn.setFixedWidth(100); self.toolbar_layout.addWidget(btn)
-        self.toolbar_layout.addSpacing(10)
-        self.toolbar_layout.addWidget(self.font_combo, 1); self.toolbar_layout.addWidget(self.size_combo); self.toolbar_layout.addWidget(color_btn)
-        self.toolbar_layout.addStretch()
-
-    def toggle_bold(self, checked):
-        self.body_editor.setFocus()
-        if self.body_editor.textCursor().hasSelection():
-            char_format = QTextCharFormat()
-            char_format.setFontWeight(QFont.Bold if checked else QFont.Normal)
-            self.body_editor.textCursor().mergeCharFormat(char_format)
-        else:
-            self.body_editor.setFontWeight(QFont.Bold if checked else QFont.Normal)
+    def _on_tab_changed(self, index):
+        """Handle tab change to update variable dropdown"""
+        # Update preview data when tab changes
+        self._update_preview_data()
     
-    def toggle_italic(self, checked):
-        self.body_editor.setFocus()
-        if self.body_editor.textCursor().hasSelection():
-            char_format = QTextCharFormat()
-            char_format.setFontItalic(checked)
-            self.body_editor.textCursor().mergeCharFormat(char_format)
-        else:
-            self.body_editor.setFontItalic(checked)
-    
-    def toggle_underline(self, checked):
-        self.body_editor.setFocus()
-        if self.body_editor.textCursor().hasSelection():
-            char_format = QTextCharFormat()
-            char_format.setFontUnderline(checked)
-            self.body_editor.textCursor().mergeCharFormat(char_format)
-        else:
-            self.body_editor.setFontUnderline(checked)
-
-    def set_selection_font_family(self, family):
-        cursor = self.body_editor.textCursor()
-        if cursor.hasSelection():
-            char_format = QTextCharFormat()
-            char_format.setFontFamilies([family])
-            cursor.mergeCharFormat(char_format)
-        self.body_editor.setFontFamily(family)
-
-    def set_selection_font_size(self, size_str):
-        if not size_str or not size_str.isdigit(): return
-        cursor = self.body_editor.textCursor()
-        if cursor.hasSelection():
-            char_format = QTextCharFormat()
-            char_format.setFontPointSize(float(size_str))
-            cursor.mergeCharFormat(char_format)
-        self.body_editor.setFontPointSize(float(size_str))
-
-    def set_text_color(self):
-        color = QColorDialog.getColor()
-        if color.isValid():
-            cursor = self.body_editor.textCursor()
-            if cursor.hasSelection():
-                char_format = QTextCharFormat()
-                char_format.setForeground(color)
-                cursor.mergeCharFormat(char_format)
-            else:
-                self.body_editor.setTextColor(color)
-    
-    def paste_as_plain_text(self):
-        self.body_editor.insertPlainText(QGuiApplication.clipboard().text())
-
-    def _sync_toolbar_state(self):
-        self.act_bold.blockSignals(True)
-        self.act_italic.blockSignals(True)
-        self.act_under.blockSignals(True)
-        self.font_combo.blockSignals(True)
-        self.size_combo.blockSignals(True)
-        
-        self.act_bold.setChecked(self.body_editor.fontWeight() > QFont.Normal)
-        self.act_italic.setChecked(self.body_editor.fontItalic())
-        self.act_under.setChecked(self.body_editor.fontUnderline())
-        self.font_combo.setCurrentText(self.body_editor.fontFamily())
-        self.size_combo.setCurrentText(str(int(self.body_editor.fontPointSize())))
-        
-        self.act_bold.blockSignals(False)
-        self.act_italic.blockSignals(False)
-        self.act_under.blockSignals(False)
-        self.font_combo.blockSignals(False)
-        self.size_combo.blockSignals(False)
+    def open_field_config(self):
+        """Open field configuration dialog"""
+        try:
+            from src.ui.field_config_dialog import FieldConfigDialog
+            dialog = FieldConfigDialog(self)
+            if dialog.exec() == QDialog.Accepted:
+                # Reload configuration and update UI
+                self.field_mapper = FieldMapper()  # Reload mapper with new config
+                self._update_preview_data()
+        except Exception as e:
+            QMessageBox.critical(self, "错误", f"无法打开字段配置对话框:\n{str(e)}")
     
     def load_excel(self):
         fp, _=QFileDialog.getOpenFileName(self, "选择Excel文件", "", "Excel Files (*.xlsx *.xls)")
@@ -357,6 +439,10 @@ class MailerApp(QWidget):
             for col_combo, _ in self.filters:
                 col_combo.clear(); col_combo.addItems(columns)
             self.update_filtered_count()
+            # Update variable dropdown with Excel columns
+            self.body_editor.update_variable_dropdown(list(self.df.columns))
+            # Update preview data with first row
+            self._update_preview_data()
         except Exception as e: QMessageBox.critical(self, "错误", f"读取 Excel 失败：\n{e}")
 
     def get_filtered_df(self):
@@ -374,7 +460,10 @@ class MailerApp(QWidget):
 
     def update_filtered_count(self):
         df = self.get_filtered_df()
-        if df is not None: self.filtered_count_label.setText(f"筛选后将发送给: <b>{len(df)}</b> 人")
+        if df is not None: 
+            self.filtered_count_label.setText(f"筛选后将发送给: <b>{len(df)}</b> 人")
+            # Update preview data when filters change
+            self._update_preview_data()
 
     def run_process(self, action: str, test_mode: bool):
         if not ensure_token(self): return
@@ -382,51 +471,43 @@ class MailerApp(QWidget):
         recipients_df = None
         recipient_source = None
         
-        if self.df is not None:
-            filtered_df = self.get_filtered_df()
-            if filtered_df is not None and not filtered_df.empty:
-                recipients_df = filtered_df
-                recipient_source = "excel"
+        # Determine data source based on active tab
+        current_tab = self.tab_widget.currentIndex()
         
-        if hasattr(self, 'selected_group_recipients') and self.selected_group_recipients:
-            import pandas as pd
-            group_data = []
-            for recipient in self.selected_group_recipients:
-                group_data.append({
-                    '姓名': recipient['name'],
-                    '邮箱': recipient['email'],
-                    'type': recipient.get('type', 'group')
-                })
-            group_df = pd.DataFrame(group_data)
-            
-            if recipients_df is not None:
-                choice = QMessageBox.question(
-                    self, "选择收件人", 
-                    "检测到您同时设置了Excel收件人和群组收件人，请选择使用哪个：\n\n"
-                    f"Excel收件人: {len(recipients_df)} 人\n"
-                    f"群组收件人: {len(group_df)} 人",
-                    QMessageBox.StandardButton.Custom,
-                    QMessageBox.StandardButton.Custom,
-                    QMessageBox.StandardButton.Cancel
-                )
-                excel_btn = choice.addButton("使用Excel收件人", QMessageBox.ActionRole)
-                group_btn = choice.addButton("使用群组收件人", QMessageBox.ActionRole)
-                choice.exec()
-                
-                if choice.clickedButton() == group_btn:
-                    recipients_df = group_df
-                    recipient_source = "group"
-                elif choice.clickedButton() == excel_btn:
+        if current_tab == 0:  # Excel tab
+            if self.df is not None:
+                filtered_df = self.get_filtered_df()
+                if filtered_df is not None and not filtered_df.empty:
+                    recipients_df = filtered_df
                     recipient_source = "excel"
                 else:
+                    QMessageBox.warning(self, "提示", "Excel 文件未加载或筛选后无收件人。")
                     return
             else:
-                recipients_df = group_df
+                QMessageBox.warning(self, "提示", "请先在 Excel 标签页中加载 Excel 文件。")
+                return
+                
+        elif current_tab == 1:  # Group tab
+            if hasattr(self, 'selected_group_recipients') and self.selected_group_recipients:
+                import pandas as pd
+                group_data = []
+                for recipient in self.selected_group_recipients:
+                    group_data.append({
+                        '姓名': recipient['name'],
+                        '邮箱': recipient['email'],
+                        'type': recipient.get('type', 'group'),
+                        '群组名称': recipient.get('group_name', ''),
+                        '群组描述': recipient.get('group_description', ''),
+                        '群组邮箱': recipient.get('group_email', ''),
+                        '成员类型': recipient.get('member_type', '成员'),
+                        '部门': recipient.get('department', ''),
+                        '职位': recipient.get('job_title', '')
+                    })
+                recipients_df = pd.DataFrame(group_data)
                 recipient_source = "group"
-        
-        if recipients_df is None or recipients_df.empty:
-            QMessageBox.warning(self, "提示", "请先加载Excel文件或选择Microsoft 365群组收件人。")
-            return
+            else:
+                QMessageBox.warning(self, "提示", "请先在群组标签页中选择 Microsoft 365 群组收件人。")
+                return
         
         subj_tpl = self.subject_input.text()
         body_tpl = self.body_editor.toHtml()
@@ -531,9 +612,118 @@ class MailerApp(QWidget):
                     self.group_label.setText(f"已选择 {recipient_count} 位群组成员")
             else:
                 self.group_label.setText("未选择群组收件人")
+            
+            # Update preview data with group data
+            self._update_preview_data()
 
-    def _insert_bullet(self):
-        self.body_editor.textCursor().insertList(QTextListFormat.ListDisc)
+    def _update_preview_data(self):
+        """Update preview data for the rich text editor with first instance data based on active tab"""
+        preview_data = {}
+        excel_columns = []
+        
+        # Add basic datetime variables
+        now = datetime.now()
+        preview_data.update({
+            '当前日期': now.strftime('%Y年%m月%d日'),
+            '当前时间': now.strftime('%H:%M:%S'),
+            '年份': now.strftime('%Y'),
+            '月份': now.strftime('%m')
+        })
+        
+        # Check which tab is active
+        current_tab = 0  # Default to Excel tab
+        if hasattr(self, 'tab_widget'):
+            current_tab = self.tab_widget.currentIndex()
+            
+            if current_tab == 0:  # Excel tab
+                if self.df is not None and not self.df.empty:
+                    filtered_df = self.get_filtered_df()
+                    if filtered_df is not None and not filtered_df.empty:
+                        # Use first row of filtered data
+                        first_row = filtered_df.iloc[0]
+                        for col in first_row.index:
+                            preview_data[col] = str(first_row[col]) if first_row[col] else f"[{col}]"
+                        excel_columns = list(self.df.columns)
+                    else:
+                        # Default Excel placeholders with sample data
+                        preview_data.update({
+                            '姓名': '李四',
+                            '邮箱': 'lisi@example.com',
+                            '部门': '市场部',
+                            '职位': '产品经理'
+                        })
+                else:
+                    # No Excel data loaded, provide sample data
+                    preview_data.update({
+                        '姓名': '李四',
+                        '邮箱': 'lisi@example.com',
+                        '部门': '市场部',
+                        '职位': '产品经理'
+                    })
+                    
+            elif current_tab == 1:  # Group tab
+                if hasattr(self, 'selected_group_recipients') and self.selected_group_recipients:
+                    # Use first group recipient
+                    first_recipient = self.selected_group_recipients[0]
+                    
+                    # Use field mapper to map fields properly
+                    if first_recipient.get('type') == 'group':
+                        # Group email address
+                        mapped_data = self.field_mapper.map_data_to_template_vars({
+                            'displayName': first_recipient.get('group_name', ''),
+                            'description': first_recipient.get('group_description', ''),
+                            'mail': first_recipient.get('group_email', '')
+                        }, 'group')
+                        preview_data.update(mapped_data)
+                    else:
+                        # Individual member
+                        mapped_data = self.field_mapper.map_data_to_template_vars({
+                            'displayName': first_recipient.get('name', ''),
+                            'mail': first_recipient.get('email', ''),
+                            'jobTitle': first_recipient.get('job_title', ''),
+                            'department': first_recipient.get('department', ''),
+                            'member_type': first_recipient.get('member_type', '成员')
+                        }, 'members')
+                        preview_data.update(mapped_data)
+                        
+                        # Also add group info
+                        group_data = self.field_mapper.map_data_to_template_vars({
+                            'displayName': first_recipient.get('group_name', ''),
+                            'description': first_recipient.get('group_description', ''),
+                            'mail': first_recipient.get('group_email', '')
+                        }, 'group')
+                        preview_data.update(group_data)
+                else:
+                    # No group data selected, provide sample defaults for testing
+                    preview_data.update({
+                        '姓名': '张三',
+                        '邮箱': 'zhangsan@example.com',
+                        '群组名称': '技术团队',
+                        '群组描述': '负责产品技术开发的核心团队',
+                        '群组邮箱': 'tech-team@company.com',
+                        '成员类型': '成员',
+                        '部门': '技术部',
+                        '职位': '高级工程师'
+                    })
+        
+        # Update the editor with preview data and variable dropdown
+        if hasattr(self, 'body_editor') and self.body_editor:
+            print(f"[DEBUG] Setting preview data: {preview_data}")  # Debug output
+            self.body_editor.set_preview_data(preview_data)
+            
+            # Update variable dropdown based on active tab
+            if current_tab == 0:  # Excel tab
+                # Show Excel columns
+                print(f"[DEBUG] Excel tab - updating dropdown with columns: {excel_columns}")
+                self.body_editor.update_variable_dropdown(excel_columns)
+            else:  # Group tab
+                # Show configured template variables for groups/members
+                template_vars = self.field_mapper.get_template_variables_for_source('group')
+                template_vars.extend(self.field_mapper.get_template_variables_for_source('members'))
+                # Remove duplicates
+                template_vars = list(set(template_vars))
+                print(f"[DEBUG] Group tab - updating dropdown with variables: {template_vars}")
+                self.body_editor.update_variable_dropdown(template_vars)
 
     def add_common_attachment(self):
         files, _ = QFileDialog.getOpenFileNames(self, "选择通用附件"); [self.att_list.addItem(f) for f in files]
@@ -550,16 +740,33 @@ class MailerApp(QWidget):
         self.match_and_verify_attachments(show_dialog=True)
 
     def match_and_verify_attachments(self, show_dialog=True):
-        if self.df is None:
-            if show_dialog: QMessageBox.warning(self, "提示", "请先加载Excel文件。"); return
-            return
-        name_col = self.name_combo.currentText()
-        if not name_col:
-            if show_dialog: QMessageBox.warning(self, "提示", "请先选择包含“专家姓名”的列。"); return
-            return
-        self.personalized_attachments_map = {}; expert_names = self.df[name_col].unique()
+        self.personalized_attachments_map = {}
+        expert_names = []
+        
+        # Get names based on active tab
+        current_tab = self.tab_widget.currentIndex()
+        
+        if current_tab == 0:  # Excel tab
+            if self.df is None:
+                if show_dialog: QMessageBox.warning(self, "提示", "请先加载Excel文件。"); return
+                return
+            name_col = self.name_combo.currentText()
+            if not name_col:
+                if show_dialog: QMessageBox.warning(self, "提示", "请先选择包含'专家姓名'的列。"); return
+                return
+            expert_names = self.df[name_col].unique()
+            
+        elif current_tab == 1:  # Group tab
+            if hasattr(self, 'selected_group_recipients') and self.selected_group_recipients:
+                expert_names = [recipient['name'] for recipient in self.selected_group_recipients if recipient.get('name')]
+            else:
+                if show_dialog: QMessageBox.warning(self, "提示", "请先选择群组收件人。"); return
+                return
+        
+        # Match names with files
         for name in expert_names:
             if not name: continue
             self.personalized_attachments_map[name] = [os.path.join(self.personalized_attachment_folder, f) for f in os.listdir(self.personalized_attachment_folder) if name in f]
+        
         if show_dialog:
             dialog = VerificationDialog(self.personalized_attachments_map, self); dialog.exec()
