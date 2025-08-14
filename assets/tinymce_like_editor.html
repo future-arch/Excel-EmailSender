@@ -1136,13 +1136,15 @@
                         newSpan.textContent = value;
                         newSpan.className = span.className + ' preview-value';
                         
+                        // Copy all inline styles from original span
+                        newSpan.style.cssText = span.style.cssText;
+                        
                         // Add subtle preview indicator (green tint) without overriding user formatting
-                        const currentBg = span.style.backgroundColor || 'transparent';
-                        if (currentBg === 'transparent' || currentBg.includes('rgba(227, 242, 253')) {
+                        const currentBg = span.style.backgroundColor || '';
+                        if (!currentBg || currentBg === 'transparent' || currentBg.includes('rgba(227, 242, 253')) {
                             newSpan.style.backgroundColor = 'rgba(232, 245, 232, 0.8)';
                         } else {
-                            // Blend with existing background
-                            newSpan.style.backgroundColor = currentBg;
+                            // Keep existing background and add green border
                             newSpan.style.boxShadow = 'inset 0 0 0 1px rgba(76, 175, 80, 0.5)';
                         }
                         
@@ -1238,23 +1240,11 @@
         editor.addEventListener('click', function(event) {
             const target = event.target;
             
-            // If clicked on a variable field, move cursor to after it
+            // If clicked on a variable field, allow selection for formatting
             if (target.classList && target.classList.contains('variable-field')) {
-                event.preventDefault();
-                
-                const selection = window.getSelection();
-                const range = document.createRange();
-                
-                // Ensure there's always editable space after the variable
+                // Don't prevent default - allow selection
+                // Just ensure there's space after for cursor movement
                 ensureEditableSpaceAfter(target);
-                
-                // Position cursor after the variable field
-                range.setStartAfter(target);
-                range.collapse(true);
-                
-                selection.removeAllRanges();
-                selection.addRange(range);
-                
                 editor.focus();
             }
         });
@@ -1278,7 +1268,7 @@
                 }
                 
                 // Add a proper space for cursor positioning
-                const spaceNode = document.createTextNode('\u00A0'); // Non-breaking space to ensure visibility
+                const spaceNode = document.createTextNode(' '); // Regular space for cursor positioning
                 if (variableField.nextSibling) {
                     parent.insertBefore(spaceNode, variableField.nextSibling);
                 } else {
@@ -1311,13 +1301,13 @@
                             existingSpace.remove();
                         }
                         
-                        // Add non-breaking space for reliable cursor positioning
-                        const spaceNode = document.createTextNode('\u00A0');
+                        // Add regular space for reliable cursor positioning
+                        const spaceNode = document.createTextNode(' ');
                         parent.appendChild(spaceNode);
                     } else if (existingSpace && existingSpace.nodeType === Node.TEXT_NODE && existingSpace.textContent.length > 0) {
                         // Ensure the existing text node ends with a space
-                        if (!existingSpace.textContent.endsWith(' ') && !existingSpace.textContent.endsWith('\u00A0')) {
-                            existingSpace.textContent += '\u00A0';
+                        if (!existingSpace.textContent.endsWith(' ')) {
+                            existingSpace.textContent += ' ';
                         }
                     }
                 }
