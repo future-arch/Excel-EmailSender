@@ -276,27 +276,21 @@
             color: #005a9e;
         }
         
-        /* Variable field styling */
+        /* Variable field styling - now allows formatting */
         .variable-field {
-            background-color: #e3f2fd !important;
-            color: #1976d2 !important;
-            padding: 2px 6px !important;
-            border-radius: 3px !important;
-            font-weight: bold !important;
-            border: 1px solid #bbdefb !important;
-            display: inline-block !important;
-            cursor: default !important;
-            user-select: none !important;
-            -webkit-user-select: none !important;
-            -moz-user-select: none !important;
-            -ms-user-select: none !important;
-            pointer-events: none !important;
-            white-space: nowrap !important;
+            position: relative;
+            white-space: nowrap;
         }
         
         .variable-field:hover {
-            background-color: #bbdefb !important;
-            border-color: #90caf9 !important;
+            background-color: rgba(187, 222, 251, 0.5) !important;
+        }
+        
+        /* Variable field selection styling */
+        .variable-field:focus,
+        .variable-field.selected {
+            outline: 2px solid #4f46e5;
+            outline-offset: 1px;
         }
         
         
@@ -396,22 +390,22 @@
             border-color: #5c6bc0 !important;
         }
         
-        /* Preview value styling */
+        /* Preview value styling - minimal visual indicator */
         .preview-value {
-            background-color: #e8f5e8 !important;
-            color: #2e7d32 !important;
-            padding: 2px 6px !important;
-            border-radius: 3px !important;
-            font-weight: bold !important;
-            border: 1px solid #a5d6a7 !important;
-            display: inline !important;
+            position: relative;
+        }
+        
+        .preview-error {
+            color: #d32f2f;
         }
         
         /* Dark theme preview values */
         .dark .preview-value {
-            background-color: #1b5e20 !important;
-            color: #a5d6a7 !important;
-            border-color: #4caf50 !important;
+            /* Inherit user formatting in dark theme */
+        }
+        
+        .dark .preview-error {
+            color: #f44336;
         }
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(-10px); }
@@ -585,12 +579,73 @@
         
         function toggleFormat(command) {
             editor.focus();
-            const isActive = document.queryCommandState(command);
-            document.execCommand(command, false, null);
+            
+            const selection = window.getSelection();
+            if (selection.rangeCount > 0) {
+                const range = selection.getRangeAt(0);
+                
+                // Check if selection includes variable fields
+                const selectedContent = range.cloneContents();
+                const variableFields = selectedContent.querySelectorAll('.variable-field');
+                
+                if (variableFields.length > 0 || 
+                    (range.startContainer.parentElement && range.startContainer.parentElement.classList.contains('variable-field')) ||
+                    (range.endContainer.parentElement && range.endContainer.parentElement.classList.contains('variable-field'))) {
+                    
+                    // Apply formatting to variable fields directly
+                    applyFormatToVariableFields(range, command);
+                } else {
+                    // Standard formatting
+                    const isActive = document.queryCommandState(command);
+                    document.execCommand(command, false, null);
+                }
+            }
+            
             updateToolbarState();
             if (window.pybridge) {
                 window.pybridge.contentChanged(editor.innerHTML);
             }
+        }
+        
+        function applyFormatToVariableFields(range, command) {
+            // Get all elements in the selection
+            const container = range.commonAncestorContainer;
+            const walker = document.createTreeWalker(
+                container,
+                NodeFilter.SHOW_ELEMENT,
+                {
+                    acceptNode: function(node) {
+                        return node.classList && node.classList.contains('variable-field') ? 
+                            NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP;
+                    }
+                }
+            );
+            
+            const variableFields = [];
+            let node;
+            while (node = walker.nextNode()) {
+                if (range.intersectsNode(node)) {
+                    variableFields.push(node);
+                }
+            }
+            
+            // Apply formatting to each variable field
+            variableFields.forEach(field => {
+                switch(command) {
+                    case 'bold':
+                        field.style.fontWeight = field.style.fontWeight === 'bold' ? 'normal' : 'bold';
+                        break;
+                    case 'italic':
+                        field.style.fontStyle = field.style.fontStyle === 'italic' ? 'normal' : 'italic';
+                        break;
+                    case 'underline':
+                        field.style.textDecoration = field.style.textDecoration === 'underline' ? 'none' : 'underline';
+                        break;
+                    case 'strikethrough':
+                        field.style.textDecoration = field.style.textDecoration === 'line-through' ? 'none' : 'line-through';
+                        break;
+                }
+            });
         }
         
         function formatBlock(tag) {
@@ -693,7 +748,15 @@
             const selection = window.getSelection();
             if (selection.rangeCount > 0) {
                 const range = selection.getRangeAt(0);
-                if (!range.collapsed) {
+                
+                // Check if selection includes variable fields
+                const selectedContent = range.cloneContents();
+                const variableFields = selectedContent.querySelectorAll('.variable-field');
+                
+                if (variableFields.length > 0) {
+                    // Apply color to variable fields in the actual document
+                    applyColorToVariableFields(range, color, 'color');
+                } else if (!range.collapsed) {
                     // Text is selected
                     const span = document.createElement('span');
                     span.style.color = color;
@@ -710,12 +773,52 @@
             }
         }
         
+        function applyColorToVariableFields(range, color, property) {
+            // Get all variable fields in the selection
+            const container = range.commonAncestorContainer;
+            const walker = document.createTreeWalker(
+                container,
+                NodeFilter.SHOW_ELEMENT,
+                {
+                    acceptNode: function(node) {
+                        return node.classList && node.classList.contains('variable-field') ? 
+                            NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP;
+                    }
+                }
+            );
+            
+            const variableFields = [];
+            let node;
+            while (node = walker.nextNode()) {
+                if (range.intersectsNode(node)) {
+                    variableFields.push(node);
+                }
+            }
+            
+            // Apply color to each variable field
+            variableFields.forEach(field => {
+                if (property === 'color') {
+                    field.style.color = color;
+                } else if (property === 'backgroundColor') {
+                    field.style.backgroundColor = color;
+                }
+            });
+        }
+        
         function changeBackColor(color) {
             editor.focus();
             const selection = window.getSelection();
             if (selection.rangeCount > 0) {
                 const range = selection.getRangeAt(0);
-                if (!range.collapsed) {
+                
+                // Check if selection includes variable fields
+                const selectedContent = range.cloneContents();
+                const variableFields = selectedContent.querySelectorAll('.variable-field');
+                
+                if (variableFields.length > 0) {
+                    // Apply background color to variable fields in the actual document
+                    applyColorToVariableFields(range, color, 'backgroundColor');
+                } else if (!range.collapsed) {
                     // Text is selected
                     const span = document.createElement('span');
                     span.style.backgroundColor = color;
@@ -796,34 +899,50 @@
             if (variable) {
                 editor.focus();
                 
-                // Create a styled span for the variable
-                const span = document.createElement('span');
-                span.textContent = variable;
-                span.style.backgroundColor = '#e3f2fd';
-                span.style.color = '#1976d2';
-                span.style.padding = '2px 6px';
-                span.style.borderRadius = '3px';
-                span.style.fontWeight = 'bold';
-                span.style.border = '1px solid #bbdefb';
-                span.style.display = 'inline-block';
-                span.style.userSelect = 'none'; // Prevent text selection inside
-                span.style.cursor = 'default';
-                span.className = 'variable-field';
-                
-                // Make the span non-editable but allow cursor to move around it
-                span.contentEditable = false;
-                
-                // Insert the styled variable
                 const selection = window.getSelection();
                 if (selection.rangeCount > 0) {
                     const range = selection.getRangeAt(0);
+                    
+                    // Get current formatting from the cursor position
+                    let currentElement = range.startContainer;
+                    if (currentElement.nodeType === Node.TEXT_NODE) {
+                        currentElement = currentElement.parentNode;
+                    }
+                    
+                    // Create a styled span for the variable that inherits formatting
+                    const span = document.createElement('span');
+                    span.textContent = variable;
+                    span.className = 'variable-field';
+                    
+                    // Copy current text formatting from parent element
+                    const computedStyle = window.getComputedStyle(currentElement);
+                    span.style.fontFamily = computedStyle.fontFamily;
+                    span.style.fontSize = computedStyle.fontSize;
+                    span.style.fontWeight = computedStyle.fontWeight;
+                    span.style.fontStyle = computedStyle.fontStyle;
+                    span.style.textDecoration = computedStyle.textDecoration;
+                    span.style.color = computedStyle.color;
+                    
+                    // Add subtle background to distinguish variables (but allow styling)
+                    span.style.backgroundColor = 'rgba(227, 242, 253, 0.3)';
+                    span.style.padding = '1px 3px';
+                    span.style.borderRadius = '2px';
+                    span.style.border = '1px solid rgba(187, 222, 251, 0.5)';
+                    span.style.display = 'inline';
+                    span.style.cursor = 'default';
+                    
+                    // Make variable fields selectable for formatting but not editable
+                    span.contentEditable = false;
+                    span.style.userSelect = 'text';
+                    
+                    // Insert the variable
                     range.deleteContents();
                     range.insertNode(span);
                     
                     // Ensure there's always editable space after the variable
                     ensureEditableSpaceAfter(span);
                     
-                    // Position cursor after the variable (there should be a space now)
+                    // Position cursor after the variable
                     range.setStartAfter(span);
                     range.collapse(true);
                     selection.removeAllRanges();
@@ -1012,17 +1131,27 @@
                         const value = previewData[variableName] || `[空值]`;
                         console.log(`Replacing variable span ${spanText} with ${value}`);
                         
-                        // Replace the entire span with a preview span
-                        const newSpan = document.createElement('span');
-                        newSpan.className = 'preview-value';
-                        newSpan.style.cssText = 'background-color: #e8f5e8; color: #2e7d32; padding: 2px 6px; border-radius: 3px; font-weight: bold; border: 1px solid #a5d6a7; display: inline;';
+                        // Preserve all existing formatting and just change the text content
+                        const newSpan = span.cloneNode(false); // Clone without children but with attributes
                         newSpan.textContent = value;
+                        newSpan.className = span.className + ' preview-value';
+                        
+                        // Add subtle preview indicator (green tint) without overriding user formatting
+                        const currentBg = span.style.backgroundColor || 'transparent';
+                        if (currentBg === 'transparent' || currentBg.includes('rgba(227, 242, 253')) {
+                            newSpan.style.backgroundColor = 'rgba(232, 245, 232, 0.8)';
+                        } else {
+                            // Blend with existing background
+                            newSpan.style.backgroundColor = currentBg;
+                            newSpan.style.boxShadow = 'inset 0 0 0 1px rgba(76, 175, 80, 0.5)';
+                        }
+                        
                         span.replaceWith(newSpan);
                     } else {
-                        // Variable not found in data
+                        // Variable not found in data - preserve formatting but show error
                         span.textContent = `[未知: ${variableName}]`;
-                        span.className = 'preview-value';
-                        span.style.cssText = 'background-color: #ffebee; color: #c62828; padding: 2px 6px; border-radius: 3px; font-weight: bold; border: 1px solid #ffcdd2; display: inline;';
+                        span.className = span.className + ' preview-value preview-error';
+                        span.style.boxShadow = 'inset 0 0 0 1px rgba(244, 67, 54, 0.5)';
                     }
                 }
             });
