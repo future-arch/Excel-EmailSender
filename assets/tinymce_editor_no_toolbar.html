@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+            background: white;
+            height: 100vh;
+        }
+        
+        .editor-container {
+            height: 100vh;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        #editor {
+            flex: 1;
+            border: 1px solid #e0e0e0;
+            outline: none;
+            padding: 12px;
+            box-sizing: border-box;
+            font-size: 14px;
+            line-height: 1.6;
+            resize: none;
+            caret-color: #000 !important;
+            cursor: text !important;
+            overflow-y: auto;
+            border-radius: 4px;
+            background: white;
+            min-height: 100px;
+        }
+        
+        #editor:focus {
+            outline: none;
+            caret-color: #000 !important;
+            border-color: #4f46e5;
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+        }
+        
+        #editor p {
+            margin: 0 0 1em 0;
+        }
+        
+        #editor h1 {
+            font-size: 2em;
+            font-weight: bold;
+            margin: 0.67em 0;
+            line-height: 1.2;
+        }
+        
+        #editor h2 {
+            font-size: 1.5em;
+            font-weight: bold;
+            margin: 0.75em 0;
+            line-height: 1.3;
+        }
+        
+        #editor h3 {
+            font-size: 1.25em;
+            font-weight: bold;
+            margin: 0.83em 0;
+            line-height: 1.4;
+        }
+        
+        #editor h4 {
+            font-size: 1.1em;
+            font-weight: bold;
+            margin: 1em 0;
+        }
+        
+        #editor h5 {
+            font-size: 1em;
+            font-weight: bold;
+            margin: 1.17em 0;
+        }
+        
+        #editor h6 {
+            font-size: 0.85em;
+            font-weight: bold;
+            margin: 1.33em 0;
+        }
+        
+        #editor ul, #editor ol {
+            margin: 1em 0;
+            padding-left: 2em;
+        }
+        
+        #editor blockquote {
+            margin: 1em 40px;
+            padding: 0.5em 1em;
+            border-left: 4px solid #ddd;
+            background: #f9f9f9;
+            font-style: italic;
+        }
+        
+        #editor pre {
+            background: #f4f4f4;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 1em;
+            overflow-x: auto;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.9em;
+        }
+        
+        #editor code {
+            background: #f4f4f4;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            padding: 0.2em 0.4em;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.9em;
+        }
+        
+        #editor table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 1em 0;
+        }
+        
+        #editor table td, #editor table th {
+            border: 1px solid #ddd;
+            padding: 8px 12px;
+            text-align: left;
+        }
+        
+        #editor table th {
+            background: #f5f5f5;
+            font-weight: bold;
+        }
+        
+        #editor hr {
+            border: none;
+            border-top: 1px solid #ddd;
+            margin: 2em 0;
+        }
+        
+        #editor a {
+            color: #007acc;
+            text-decoration: underline;
+        }
+        
+        #editor a:hover {
+            color: #005a9e;
+        }
+        
+        .preview-error {
+            color: #d32f2f;
+            background-color: #ffcdd2;
+            padding: 1px 3px;
+            border-radius: 2px;
+        }
+        
+        .dark .preview-error {
+            color: #f44336;
+            background-color: #ffcdd2;
+        }
+
+        .dark #editor {
+            background: #1e1e1e;
+            color: #fff;
+            caret-color: #fff !important;
+            border-color: #374151;
+        }
+
+        .dark #editor:focus {
+            border-color: #6366f1;
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+        }
+
+        .dark body {
+            background: #1e1e1e;
+        }
+    </style>
+</head>
+<body>
+    <div class="editor-container">
+        <div id="editor" contenteditable="true" placeholder="例如：尊敬的 {{姓名}} 专家，您好！感谢您参与 {{群组名称}} 的讨论。">
+            <p><br></p>
+        </div>
+    </div>
+    
+    <script>
+        const editor = document.getElementById('editor');
+        let isUpdating = false;
+        let isPreviewMode = false;
+        let originalContent = '';
+        let previewData = {};
+
+        // Focus editor on load
+        window.addEventListener('load', function() {
+            setTimeout(() => editor.focus(), 100);
+        });
+
+        // Handle content changes
+        editor.addEventListener('input', function() {
+            if (!isUpdating && window.pybridge) {
+                window.pybridge.contentChanged(editor.innerHTML);
+            }
+        });
+
+        editor.addEventListener('selectionchange', updateToolbarState);
+        editor.addEventListener('keyup', updateToolbarState);
+        editor.addEventListener('mouseup', () => {
+            handleSelectionOnMouseUp();
+        });
+
+        function handleSelectionOnMouseUp() {
+            const selection = window.getSelection();
+            if (selection.rangeCount > 0 && !isPreviewMode) {
+                const range = selection.getRangeAt(0);
+                const container = range.commonAncestorContainer;
+
+                // Check if the selection is collapsed (it's a click) and inside a text node
+                if (range.collapsed && container.nodeType === Node.TEXT_NODE) {
+                    const text = container.textContent;
+                    const placeholderRegex = /{{[^{}]+}}/g;
+                    let match;
+
+                    while ((match = placeholderRegex.exec(text)) !== null) {
+                        const startIndex = match.index;
+                        const endIndex = startIndex + match[0].length;
+
+                        // Check if the click was inside a placeholder
+                        if (range.startOffset > startIndex && range.startOffset < endIndex) {
+                            const newRange = document.createRange();
+                            newRange.setStart(container, startIndex);
+                            newRange.setEnd(container, endIndex);
+                            selection.removeAllRanges();
+                            selection.addRange(newRange);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Command execution
+        function execCommand(command, value = null) {
+            editor.focus();
+            document.execCommand(command, false, value);
+            if (window.pybridge) {
+                window.pybridge.contentChanged(editor.innerHTML);
+            }
+        }
+
+        function toggleFormat(command) {
+            execCommand(command);
+        }
+
+        function formatBlock(tag) {
+            if (tag) execCommand('formatBlock', tag);
+        }
+
+        function changeFontSize(size) {
+            if (size) execCommand('fontSize', size);
+        }
+
+        function changeFontFamily(family) {
+            if (family) execCommand('fontName', family);
+        }
+
+        function changeForeColor(color) {
+            execCommand('foreColor', color);
+        }
+
+        function changeBackColor(color) {
+            execCommand('backColor', color);
+        }
+
+        function insertLink() {
+            const url = prompt('请输入链接地址:', 'https://');
+            if (url && url !== 'https://') {
+                execCommand('createLink', url);
+            }
+        }
+
+        function insertTable() {
+            const rows = prompt('行数:', '3');
+            const cols = prompt('列数:', '3');
+            if (rows && cols && rows > 0 && cols > 0) {
+                let tableHTML = '<table><tbody>';
+                for (let r = 0; r < rows; r++) {
+                    tableHTML += '<tr>';
+                    for (let c = 0; c < cols; c++) {
+                        tableHTML += '<td>单元格</td>';
+                    }
+                    tableHTML += '</tr>';
+                }
+                tableHTML += '</tbody></table><p><br></p>';
+                execCommand('insertHTML', tableHTML);
+            }
+        }
+
+        function insertVariable(variable) {
+            if (variable) {
+                execCommand('insertText', variable);
+            }
+        }
+
+        function insertEmoji(emoji) {
+            execCommand('insertText', emoji);
+        }
+
+        function toggleSource() {
+            alert('Source view is not implemented in this version.');
+        }
+
+        function updateToolbarState() {
+            // This function is called by the editor but toolbar state is now managed externally
+        }
+
+        // --- Preview Logic ---
+        function togglePreview() {
+            if (!isPreviewMode && Object.keys(previewData).length === 0) {
+                alert('没有可预览的数据。请先加载Excel文件或选择M365群组。');
+                return;
+            }
+            isPreviewMode ? exitPreviewMode() : enterPreviewMode();
+        }
+
+        function enterPreviewMode() {
+            originalContent = editor.innerHTML;
+            let previewContent = originalContent;
+
+            Object.keys(previewData).forEach(key => {
+                const placeholder = `{{${key}}}`;
+                const value = previewData[key] || `<span class="preview-error">[${key} 未找到]</span>`;
+                previewContent = previewContent.replace(new RegExp(escapeRegExp(placeholder), 'g'), value);
+            });
+
+            editor.innerHTML = previewContent;
+            editor.contentEditable = false;
+            isPreviewMode = true;
+        }
+
+        function exitPreviewMode() {
+            editor.innerHTML = originalContent;
+            editor.contentEditable = true;
+            isPreviewMode = false;
+        }
+
+        function escapeRegExp(string) {
+            return string.replace(/[.*+?^${}()|[\\]/g, '\\$&');
+        }
+
+        // --- Python Communication ---
+        function setContent(html) {
+            isUpdating = true;
+            editor.innerHTML = html || '<p><br></p>';
+            isUpdating = false;
+        }
+
+        function getContent() {
+            return editor.innerHTML;
+        }
+
+        function getPlainText() {
+            return editor.innerText || editor.textContent;
+        }
+
+        function clearContent() {
+            setContent('');
+        }
+
+        function focusEditor() {
+            editor.focus();
+        }
+
+        function setTheme(theme) {
+            document.body.classList.toggle('dark', theme === 'dark');
+        }
+
+        function setPreviewData(data) {
+            previewData = data || {};
+        }
+
+        function updateVariableDropdown(excelColumns) {
+            // Variable dropdown is now managed externally by the toolbar
+        }
+    </script>
+</body>
+</html>

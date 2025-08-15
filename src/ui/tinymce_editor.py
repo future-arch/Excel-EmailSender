@@ -2,7 +2,7 @@ import os
 import sys
 import json
 from PySide6.QtWidgets import QWidget, QVBoxLayout
-from PySide6.QtCore import QUrl, Signal, QObject, Slot, QTimer, QEventLoop, Qt
+from PySide6.QtCore import QUrl, Signal, QObject, Slot, QTimer, QEventLoop, Qt, QSize
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtWebChannel import QWebChannel
 
@@ -16,11 +16,20 @@ class PyBridge(QObject):
 
 
 class TinyMCEEditor(QWidget):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, external_toolbar=False):
         super().__init__(parent)
+        self._external_toolbar = external_toolbar
         self.setup_ui()
         self._content = ""
         self._theme = "Light"
+    
+    def sizeHint(self):
+        """Provide reasonable size hint to prevent excessive window minimum height"""
+        return QSize(600, 300)
+    
+    def minimumSizeHint(self):
+        """Provide reasonable minimum size hint to prevent window height issues"""
+        return QSize(300, 200)
         
     def setup_ui(self):
         layout = QVBoxLayout(self)
@@ -28,8 +37,11 @@ class TinyMCEEditor(QWidget):
         
         # Create web view
         self.web_view = QWebEngineView()
-        # Set height to 0.75x (reduced from previous 2x)
-        self.web_view.setMinimumHeight(300)
+        # Reduce minimum height to make it more resizable
+        self.web_view.setMinimumHeight(150)
+        # Set size policy to allow both expansion and contraction
+        from PySide6.QtWidgets import QSizePolicy
+        self.web_view.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         # Ensure web view can receive focus
         self.web_view.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         layout.addWidget(self.web_view)
@@ -52,14 +64,19 @@ class TinyMCEEditor(QWidget):
     def load_editor(self):
         # Get the path to the HTML template
         project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        html_path = os.path.join(project_root, "assets", "tinymce_like_editor.html")
+        
+        # Choose template based on external toolbar setting
+        if self._external_toolbar:
+            html_path = os.path.join(project_root, "assets", "tinymce_editor_no_toolbar.html")
+        else:
+            html_path = os.path.join(project_root, "assets", "tinymce_like_editor.html")
         
         if os.path.exists(html_path):
             # Load the HTML file
             url = QUrl.fromLocalFile(html_path)
             self.web_view.load(url)
         else:
-            print(f"Error: TinyMCE-like editor template not found at {html_path}")
+            print(f"Error: TinyMCE editor template not found at {html_path}")
     
     def on_content_changed(self, content):
         self._content = content

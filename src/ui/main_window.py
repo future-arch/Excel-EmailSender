@@ -9,7 +9,7 @@ from PySide6.QtWidgets import (
     QTextEdit, QLineEdit, QFileDialog, QComboBox, QMessageBox, QFrame,
     QDialog, QProgressBar, QListWidget, QListWidgetItem, QStyle,
     QTableWidget, QTableWidgetItem, QHeaderView, QRadioButton, QButtonGroup, QCheckBox,
-    QScrollArea, QGroupBox, QTabWidget, QSizePolicy
+    QScrollArea, QGroupBox, QTabWidget, QSizePolicy, QSplitter
 )
 from PySide6.QtCore import QObject, Signal, QThread, Qt
 from PySide6.QtGui import (
@@ -181,6 +181,10 @@ class MailerApp(QWidget):
         if hasattr(self, 'body_editor'):
             self.body_editor.setTheme(theme)
         
+        # Update external toolbar theme if it exists
+        if hasattr(self, 'tinymce_toolbar'):
+            self.tinymce_toolbar.set_theme(theme)
+        
         self._save_settings()
         
         # Re-normalize window flags after theme change (some platforms may trigger layout changes)
@@ -190,23 +194,20 @@ class MailerApp(QWidget):
 
     def _normalize_window_flags_and_geometry(self):
         """Normalize window flags and geometry to prevent stay-on-top issues"""
-        # Save current visibility state
-        was_visible = self.isVisible()
-        
-        # 1) Clear problematic flags based on current flags
+        # Clear problematic flags that can cause window management issues
         flags = self.windowFlags()
         for bad in (
-            Qt.WindowStaysOnTopHint,      # Stay on top
+            Qt.WindowStaysOnTopHint,       # Stay on top - main culprit
             Qt.Tool,                       # Tool window (may stick to edges on macOS)
             Qt.FramelessWindowHint,        # Frameless (can't drag, appears "stuck")
-            Qt.BypassWindowManagerHint,
-            Qt.Popup,
+            Qt.BypassWindowManagerHint,    # Bypass window manager
+            Qt.Popup,                      # Popup window behavior
             Qt.SplashScreen,               # Splash screen (can't be moved/resized)
             Qt.SubWindow,                  # Sub window (might have constraints)
         ):
             flags &= ~bad
 
-        # 2) Ensure standard top-level window decorations are available
+        # Ensure standard resizable top-level window decorations
         flags |= (
             Qt.Window
             | Qt.WindowTitleHint
@@ -215,35 +216,32 @@ class MailerApp(QWidget):
             | Qt.WindowCloseButtonHint
         )
         
-        # Apply the flags
+        # Apply the flags and show normally to make them take effect immediately
         self.setWindowFlags(flags)
         self.setWindowModality(Qt.NonModal)
+        self.showNormal()  # Use showNormal() to ensure flags take effect
         
-        # Ensure window can be resized
-        self.setMinimumSize(600, 400)  # Set reasonable minimum size
+        # Set reasonable minimum and maximum sizes
+        self.setMinimumSize(640, 480)  # Match the size set in _build_ui
         self.setMaximumSize(16777215, 16777215)  # Remove any maximum size constraints
         
-        # Only show if it was previously visible
-        if was_visible:
-            self.show()  # Use show() instead of showNormal()
-            
-            # Center window after showing
-            from PySide6.QtCore import QTimer
-            QTimer.singleShot(100, self._center_window)
+        # Center window on screen, avoiding problematic positions
+        self._center_window_properly()
     
-    def _center_window(self):
-        """Center the window on screen, accounting for macOS menubar"""
+    def _center_window_properly(self):
+        """Center window on screen and avoid problematic positions"""
         screen = QGuiApplication.primaryScreen()
         if screen:
             available = screen.availableGeometry()
-            size = self.frameGeometry()
+            frame_geom = self.frameGeometry()
             
-            # Center horizontally
-            x = (available.width() - size.width()) // 2 + available.x()
+            # Calculate center position
+            center_point = available.center()
+            frame_geom.moveCenter(center_point)
             
-            # Position vertically with offset from top (to avoid menubar)
-            # Use 10% from top instead of centering to avoid menubar issues
-            y = available.y() + int(available.height() * 0.1)
+            # Move to the calculated position, ensuring it's within available area
+            x = max(available.x(), min(frame_geom.x(), available.right() - frame_geom.width()))
+            y = max(available.y(), min(frame_geom.y(), available.bottom() - frame_geom.height()))
             
             self.move(x, y)
     
@@ -288,19 +286,44 @@ class MailerApp(QWidget):
         
         main_layout.addLayout(toolbar_layout)
         
+        # Create scrollable container for main content (Tab + Email composition)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        
+        container = QWidget()
+        container_layout = QVBoxLayout(container)
+        container_layout.setContentsMargins(0, 0, 0, 0)
+        container_layout.setSpacing(12)
+        
         # Create tab widget
         self.tab_widget = QTabWidget()
-        main_layout.addWidget(self.tab_widget)
+        container_layout.addWidget(self.tab_widget)
         
         # Create tabs
         self._create_excel_tab()
         self._create_group_tab()
         
-        # Add shared email composition area at bottom
-        self._create_email_composition_area(main_layout)
+        # Add shared email composition area
+        composition_frame = self._create_email_composition_area(container_layout)
+        
+        # Set flexible size policies for major widgets to prevent excessive minimum height
+        self.tab_widget.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
+        
+        # Put container in scroll area and add to main layout
+        scroll.setWidget(container)
+        main_layout.addWidget(scroll, 1)
         
         # Connect tab change event to update variables
         self.tab_widget.currentChanged.connect(self._on_tab_changed)
+        
+        # Set reasonable window minimum size to override any excessive child widget constraints
+        self.setMinimumSize(640, 480)
+        
+        # Reset minimum heights for major containers to prevent them from constraining window
+        for widget in [self, self.tab_widget, composition_frame]:
+            if hasattr(widget, 'setMinimumHeight'):
+                widget.setMinimumHeight(0)
         
         # Don't normalize here - will be done after window is shown
 
@@ -388,11 +411,12 @@ class MailerApp(QWidget):
         member_list_label = QLabel("群组成员列表:")
         group_section_layout.addWidget(member_list_label)
         
-        # Create scrollable area for member list
+        # Create scrollable area for member list - make it resizable vertically
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
-        scroll_area.setMinimumHeight(200)
-        scroll_area.setMaximumHeight(300)
+        scroll_area.setMinimumHeight(100)  # Set reasonable minimum
+        # Remove setMaximumHeight to allow vertical resizing
+        scroll_area.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         
         # Container widget for the member list
         self.member_list_widget = QWidget()
@@ -434,12 +458,13 @@ class MailerApp(QWidget):
         group_section_layout.addWidget(self.member_count_label)
         
         group_layout.addWidget(group_section)
-        group_layout.addStretch()
+        # Remove addStretch() to allow the member list area to expand
+        # group_layout.addStretch()
         
         self.tab_widget.addTab(group_widget, "从 Microsoft 365 群组")
 
-    def _create_email_composition_area(self, main_layout):
-        """Create the shared email composition area"""
+    def _create_email_composition_area(self, container_layout):
+        """Create the shared email composition area and return it"""
         composition_frame = QFrame()
         composition_frame.setFrameStyle(QFrame.Shape.StyledPanel)
         composition_layout = QVBoxLayout(composition_frame)
@@ -454,11 +479,24 @@ class MailerApp(QWidget):
         subject_layout.addWidget(self.subject_input)
         composition_layout.addLayout(subject_layout)
         
-        # Email body
+        # Email body - make it vertically resizable with external toolbar
         composition_layout.addWidget(QLabel("邮件正文:"))
-        self.body_editor = TinyMCEEditor()
+        
+        # Create TinyMCE editor with external toolbar
+        self.body_editor = TinyMCEEditor(external_toolbar=True)
         self.body_editor.setPlaceholderText("例如：尊敬的 {{姓名}} 专家，您好！")
-        composition_layout.addWidget(self.body_editor)
+        
+        # Create and add external toolbar
+        from src.ui.tinymce_toolbar import TinyMCEToolbar
+        self.tinymce_toolbar = TinyMCEToolbar()
+        self.tinymce_toolbar.set_editor(self.body_editor)
+        composition_layout.addWidget(self.tinymce_toolbar)
+        
+        # Set flexible size policy for full resizability
+        self.body_editor.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.body_editor.setMinimumHeight(150)  # Lower minimum to allow more compression
+        # Add with stretch factor to make it take available space
+        composition_layout.addWidget(self.body_editor, 1)
         
         # Attachments
         attachments_layout = QHBoxLayout()
@@ -522,7 +560,13 @@ class MailerApp(QWidget):
         btn_layout.addStretch()
         
         composition_layout.addLayout(btn_layout)
-        main_layout.addWidget(composition_frame)
+        
+        # Set flexible size policy to prevent excessive minimum height
+        composition_frame.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
+        
+        # Add to container layout and return the frame
+        container_layout.addWidget(composition_frame)
+        return composition_frame
 
     def _on_tab_changed(self, index):
         """Handle tab change to update variable dropdown"""
@@ -555,6 +599,9 @@ class MailerApp(QWidget):
             self.update_filtered_count()
             # Update variable dropdown with Excel columns
             self.body_editor.update_variable_dropdown(list(self.df.columns))
+            # Also update external toolbar if it exists
+            if hasattr(self, 'tinymce_toolbar'):
+                self.tinymce_toolbar.update_variable_dropdown(list(self.df.columns))
             # Update preview data with first row
             self._update_preview_data()
         except Exception as e: QMessageBox.critical(self, "错误", f"读取 Excel 失败：\n{e}")
@@ -1014,11 +1061,17 @@ class MailerApp(QWidget):
                 # Show Excel columns
                 # print(f"[DEBUG] Excel tab - updating dropdown with columns: {excel_columns}")
                 self.body_editor.update_variable_dropdown(excel_columns)
+                # Also update external toolbar if it exists
+                if hasattr(self, 'tinymce_toolbar'):
+                    self.tinymce_toolbar.update_variable_dropdown(excel_columns)
             else:  # Group tab
                 # Show common group and member variables
                 group_vars = ['姓名', '邮箱', '群组名称', '群组描述', '群组邮箱', '成员类型', '部门', '职位']
                 # print(f"[DEBUG] Group tab - updating dropdown with variables: {group_vars}")
                 self.body_editor.update_variable_dropdown(group_vars)
+                # Also update external toolbar if it exists
+                if hasattr(self, 'tinymce_toolbar'):
+                    self.tinymce_toolbar.update_variable_dropdown(group_vars)
 
     def add_common_attachment(self):
         files, _ = QFileDialog.getOpenFileNames(self, "选择通用附件"); [self.att_list.addItem(f) for f in files]
