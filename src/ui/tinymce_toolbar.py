@@ -1,9 +1,9 @@
 from PySide6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QPushButton, QComboBox, QLabel, 
-    QToolButton, QButtonGroup, QFrame, QColorDialog, QSizePolicy
+    QToolButton, QButtonGroup, QFrame, QColorDialog, QSizePolicy, QListView
 )
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QFont, QIcon, QColor
+from PySide6.QtGui import QFont, QIcon, QColor, QPalette
 
 
 class TinyMCEToolbar(QWidget):
@@ -36,17 +36,17 @@ class TinyMCEToolbar(QWidget):
         self._add_separator_to_layout(row1_layout)
         
         # Format dropdowns
-        self.format_combo = QComboBox()
+        self.format_combo = self._configure_combo_box(QComboBox())
         self.format_combo.addItems(["格式", "段落", "标题 1", "标题 2", "标题 3", "标题 4", "标题 5", "标题 6", "引用", "代码块"])
         self.format_combo.currentTextChanged.connect(self._format_changed)
         row1_layout.addWidget(self.format_combo)
         
-        self.font_size_combo = QComboBox()
+        self.font_size_combo = self._configure_combo_box(QComboBox())
         self.font_size_combo.addItems(["字号", "10px", "12px", "14px", "16px", "18px", "24px", "32px"])
         self.font_size_combo.currentTextChanged.connect(self._font_size_changed)
         row1_layout.addWidget(self.font_size_combo)
         
-        self.font_family_combo = QComboBox()
+        self.font_family_combo = self._configure_combo_box(QComboBox())
         self.font_family_combo.addItems([
             "字体", "Arial", "Helvetica", "Times New Roman", "Georgia", "Verdana", 
             "Courier New", "微软雅黑", "苹方", "冬青黑体", "宋体", "黑体", "华文黑体", 
@@ -112,7 +112,7 @@ class TinyMCEToolbar(QWidget):
         self._add_separator_to_layout(row2_layout)
         
         # Variable dropdown
-        self.variable_combo = QComboBox()
+        self.variable_combo = self._configure_combo_box(QComboBox())
         self.variable_combo.setMinimumWidth(120)
         self._setup_variable_combo()
         self.variable_combo.currentTextChanged.connect(self._insert_variable)
@@ -178,11 +178,49 @@ class TinyMCEToolbar(QWidget):
                 min-height: 22px;
                 max-height: 24px;
                 font-size: 11px;
+                color: #1f2937;
             }
             QComboBox:hover {
                 border-color: #c7d2fe;
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
                     stop:0 #f6f8fa, stop:1 #eaeef2);
+            }
+            QComboBox QAbstractItemView {
+                border: 1px solid #d1d9e0;
+                background-color: #ffffff;
+                color: #1f2937;
+                selection-background-color: #4f46e5;
+                selection-color: #ffffff;
+                outline: none;
+            }
+            QComboBox QAbstractItemView::item {
+                padding: 4px 8px;
+                border-bottom: 1px solid #f1f3f4;
+                min-height: 20px;
+                color: #1f2937;
+                background-color: transparent;
+            }
+            QComboBox QAbstractItemView::item:hover {
+                background: #e5e7eb !important;
+                color: #1f2937 !important;
+            }
+            QComboBox QListView::item:hover {
+                background: #e5e7eb !important;
+                color: #1f2937 !important;
+            }
+            QComboBox QAbstractItemView::item:selected {
+                background-color: #4f46e5 !important;
+                color: #ffffff !important;
+                border: none !important;
+            }
+            QComboBox QAbstractItemView::item:focus {
+                background-color: #4f46e5 !important;
+                color: #ffffff !important;
+                border: none !important;
+            }
+            QComboBox QAbstractItemView::item:selected:hover {
+                background-color: #4338ca !important;
+                color: #ffffff !important;
             }
             QFrame {
                 color: #d0d7de;
@@ -216,6 +254,26 @@ class TinyMCEToolbar(QWidget):
         separator.setMaximumHeight(20)
         separator.setMaximumWidth(1)
         layout.addWidget(separator)
+    
+    def _configure_combo_box(self, combo):
+        """Configure combo box with custom styling to force hover colors"""
+        combo.setAttribute(Qt.WidgetAttribute.WA_MacShowFocusRect, False)
+        
+        # Create custom list view for dropdown
+        list_view = QListView()
+        combo.setView(list_view)
+        
+        # Set custom palette for the list view
+        palette = list_view.palette()
+        
+        # Light theme colors (will be updated in set_theme)
+        palette.setColor(QPalette.ColorRole.Base, QColor("#ffffff"))  # Background
+        palette.setColor(QPalette.ColorRole.Text, QColor("#1f2937"))  # Text
+        palette.setColor(QPalette.ColorRole.Highlight, QColor("#e5e7eb"))  # Hover background
+        palette.setColor(QPalette.ColorRole.HighlightedText, QColor("#1f2937"))  # Hover text
+        
+        list_view.setPalette(palette)
+        return combo
         
     def _setup_variable_combo(self):
         """Setup the variable dropdown"""
@@ -349,6 +407,11 @@ class TinyMCEToolbar(QWidget):
                 
     def set_theme(self, theme):
         """Set the toolbar theme"""
+        # Force refresh by clearing stylesheet first
+        self.setStyleSheet("")
+        from PySide6.QtWidgets import QApplication
+        QApplication.processEvents()  # Force processing of events
+        
         if theme == "Dark":
             self.setStyleSheet("""
                 TinyMCEToolbar {
@@ -398,6 +461,43 @@ class TinyMCEToolbar(QWidget):
                 QComboBox:hover {
                     border-color: #818cf8;
                 }
+                QComboBox QAbstractItemView {
+                    border: 1px solid #4b5563;
+                    background-color: #1f2937;
+                    color: #f9fafb;
+                    selection-background-color: #6366f1;
+                    selection-color: #ffffff;
+                    outline: none;
+                }
+                QComboBox QAbstractItemView::item {
+                    padding: 4px 8px;
+                    border-bottom: 1px solid #374151;
+                    min-height: 20px;
+                    color: #f9fafb;
+                    background-color: transparent;
+                }
+                QComboBox QAbstractItemView::item:hover {
+                    background: #4b5563 !important;
+                    color: #ffffff !important;
+                }
+                QComboBox QListView::item:hover {
+                    background: #4b5563 !important;
+                    color: #ffffff !important;
+                }
+                QComboBox QAbstractItemView::item:selected {
+                    background-color: #6366f1 !important;
+                    color: #ffffff !important;
+                    border: none !important;
+                }
+                QComboBox QAbstractItemView::item:focus {
+                    background-color: #6366f1 !important;
+                    color: #ffffff !important;
+                    border: none !important;
+                }
+                QComboBox QAbstractItemView::item:selected:hover {
+                    background-color: #5b21b6 !important;
+                    color: #ffffff !important;
+                }
                 QFrame {
                     color: #4b5563;
                     margin: 0px 2px;
@@ -446,14 +546,83 @@ class TinyMCEToolbar(QWidget):
                     min-height: 22px;
                     max-height: 24px;
                     font-size: 11px;
+                    color: #1f2937;
                 }
                 QComboBox:hover {
                     border-color: #c7d2fe;
                     background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
                         stop:0 #f6f8fa, stop:1 #eaeef2);
                 }
+                QComboBox QAbstractItemView {
+                    border: 1px solid #d1d9e0;
+                    background-color: #ffffff;
+                    color: #1f2937;
+                    selection-background-color: #4f46e5;
+                    selection-color: #ffffff;
+                    outline: none;
+                }
+                QComboBox QAbstractItemView::item {
+                    padding: 4px 8px;
+                    border-bottom: 1px solid #f1f3f4;
+                    min-height: 20px;
+                    color: #1f2937;
+                    background-color: transparent;
+                }
+                QComboBox QAbstractItemView::item:hover {
+                    background: #e5e7eb !important;
+                    color: #1f2937 !important;
+                }
+                QComboBox QListView::item:hover {
+                    background: #e5e7eb !important;
+                    color: #1f2937 !important;
+                }
+                QComboBox QAbstractItemView::item:selected {
+                    background-color: #4f46e5 !important;
+                    color: #ffffff !important;
+                    border: none !important;
+                }
+                QComboBox QAbstractItemView::item:focus {
+                    background-color: #4f46e5 !important;
+                    color: #ffffff !important;
+                    border: none !important;
+                }
+                QComboBox QAbstractItemView::item:selected:hover {
+                    background-color: #4338ca !important;
+                    color: #ffffff !important;
+                }
                 QFrame {
                     color: #d0d7de;
                     margin: 0px 2px;
                 }
             """)
+        
+        # Update combo box palettes based on theme
+        self._update_combo_box_palettes(theme)
+        
+        # Force widget to update its style
+        self.style().unpolish(self)
+        self.style().polish(self)
+        QApplication.processEvents()
+    
+    def _update_combo_box_palettes(self, theme):
+        """Update combo box dropdown palettes for the theme"""
+        combos = [self.format_combo, self.font_size_combo, self.font_family_combo, self.variable_combo]
+        
+        for combo in combos:
+            if combo.view():
+                palette = combo.view().palette()
+                
+                if theme == "Dark":
+                    # Dark theme colors
+                    palette.setColor(QPalette.ColorRole.Base, QColor("#1f2937"))  # Background
+                    palette.setColor(QPalette.ColorRole.Text, QColor("#f9fafb"))  # Text
+                    palette.setColor(QPalette.ColorRole.Highlight, QColor("#4b5563"))  # Hover background
+                    palette.setColor(QPalette.ColorRole.HighlightedText, QColor("#ffffff"))  # Hover text
+                else:
+                    # Light theme colors
+                    palette.setColor(QPalette.ColorRole.Base, QColor("#ffffff"))  # Background
+                    palette.setColor(QPalette.ColorRole.Text, QColor("#1f2937"))  # Text
+                    palette.setColor(QPalette.ColorRole.Highlight, QColor("#e5e7eb"))  # Hover background
+                    palette.setColor(QPalette.ColorRole.HighlightedText, QColor("#1f2937"))  # Hover text
+                
+                combo.view().setPalette(palette)

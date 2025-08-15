@@ -177,9 +177,13 @@ class MailerApp(QWidget):
             QApplication.instance().setPalette(QApplication.style().standardPalette())
             QApplication.instance().setStyleSheet("")
         
-        # Update TinyMCE editor theme if it exists
-        if hasattr(self, 'body_editor'):
-            self.body_editor.setTheme(theme)
+        # Update TinyMCE editor theme if it exists and is loaded
+        if hasattr(self, 'body_editor') and hasattr(self.body_editor, '_editor_loaded'):
+            if self.body_editor._editor_loaded:
+                self.body_editor.setTheme(theme)
+            else:
+                # Store theme to apply later when editor is loaded
+                self.body_editor._pending_theme = theme
         
         # Update external toolbar theme if it exists
         if hasattr(self, 'tinymce_toolbar'):
@@ -327,10 +331,17 @@ class MailerApp(QWidget):
         
         # Don't normalize here - will be done after window is shown
 
+    def _initialize_editor(self):
+        """Initialize heavy editor components after UI is shown"""
+        if hasattr(self, 'body_editor'):
+            # Force editor to load if it hasn't already
+            if hasattr(self.body_editor, '_editor_loaded') and not self.body_editor._editor_loaded:
+                self.body_editor.load_editor()
+
     def _create_excel_tab(self):
         """Create the Excel file tab content"""
-        excel_widget = QWidget()
-        excel_layout = QVBoxLayout(excel_widget)
+        self.excel_widget = QWidget()
+        excel_layout = QVBoxLayout(self.excel_widget)
         excel_layout.setSpacing(15)
         excel_layout.setContentsMargins(10, 10, 10, 10)
         
@@ -386,7 +397,7 @@ class MailerApp(QWidget):
         excel_layout.addWidget(filter_section)
         excel_layout.addStretch()
         
-        self.tab_widget.addTab(excel_widget, "从 Excel 文件")
+        self.tab_widget.addTab(self.excel_widget, "从 Excel 文件")
 
     def _create_group_tab(self):
         """Create the Microsoft 365 Groups tab content"""
@@ -599,22 +610,102 @@ class MailerApp(QWidget):
         fp, _=QFileDialog.getOpenFileName(self, "选择Excel文件", "", "Excel Files (*.xlsx *.xls)")
         if not fp: return
         try:
-            self.df = pd.read_excel(fp, dtype=str).fillna('')
-            self.excel_label.setText(f"已加载: {os.path.basename(fp)} (共 {len(self.df)} 条)")
-            columns = ["【不筛选】"] + list(self.df.columns)
-            self.email_combo.clear(); self.email_combo.addItems(self.df.columns)
-            self.name_combo.clear(); self.name_combo.addItems(self.df.columns)
-            for col_combo, _ in self.filters:
-                col_combo.clear(); col_combo.addItems(columns)
-            self.update_filtered_count()
-            # Update variable dropdown with Excel columns
-            self.body_editor.update_variable_dropdown(list(self.df.columns))
-            # Also update external toolbar if it exists
-            if hasattr(self, 'tinymce_toolbar'):
-                self.tinymce_toolbar.update_variable_dropdown(list(self.df.columns))
-            # Update preview data with first row
-            self._update_preview_data()
-        except Exception as e: QMessageBox.critical(self, "错误", f"读取 Excel 失败：\n{e}")
+            # First, get all sheet names
+            import pandas as pd
+            excel_file = pd.ExcelFile(fp)
+            sheet_names = excel_file.sheet_names
+            
+            # Store the Excel file and sheet information
+            self.excel_file_path = fp
+            self.excel_sheets = {}
+            self.current_sheet = None
+            
+            # Load all sheets
+            for sheet_name in sheet_names:
+                self.excel_sheets[sheet_name] = pd.read_excel(fp, sheet_name=sheet_name, dtype=str).fillna('')
+            
+            # Update the label to show sheet count
+            self.excel_label.setText(f"已加载: {os.path.basename(fp)} (共 {len(sheet_names)} 个工作表)")
+            
+            # Show sheet selection UI
+            self._show_sheet_selection(sheet_names)
+            
+            # Load the first sheet by default
+            if sheet_names:
+                self._select_sheet(sheet_names[0])
+            
+        except Exception as e: 
+            QMessageBox.critical(self, "错误", f"读取 Excel 失败：\n{e}")
+            
+    def _show_sheet_selection(self, sheet_names):
+        """Show sheet selection radio buttons"""
+        # Clear existing sheet selection if any
+        if hasattr(self, 'sheet_selection_layout'):
+            self._clear_layout(self.sheet_selection_layout)
+        else:
+            # Create new layout for sheet selection
+            self.sheet_selection_layout = QHBoxLayout()
+            # Insert into the file_section, right before the column selection
+            file_section_layout = self.excel_widget.layout().itemAt(0).widget().layout()
+            file_section_layout.insertLayout(1, self.sheet_selection_layout)
+        
+        # Add label
+        self.sheet_selection_layout.addWidget(QLabel("选择 tab:"))
+        
+        # Create radio button group
+        self.sheet_button_group = QButtonGroup()
+        self.sheet_buttons = []
+        
+        for i, sheet_name in enumerate(sheet_names):
+            radio_btn = QRadioButton(sheet_name)
+            if i == 0:  # Select first sheet by default
+                radio_btn.setChecked(True)
+            radio_btn.toggled.connect(lambda checked, name=sheet_name: self._on_sheet_selected(checked, name))
+            self.sheet_button_group.addButton(radio_btn)
+            self.sheet_buttons.append(radio_btn)
+            self.sheet_selection_layout.addWidget(radio_btn)
+        
+        self.sheet_selection_layout.addStretch()
+            
+    def _on_sheet_selected(self, checked, sheet_name):
+        """Handle sheet selection change"""
+        if checked:
+            self._select_sheet(sheet_name)
+            
+    def _select_sheet(self, sheet_name):
+        """Select and load data from specified sheet"""
+        if sheet_name not in self.excel_sheets:
+            return
+            
+        self.current_sheet = sheet_name
+        self.df = self.excel_sheets[sheet_name]
+        
+        # Update UI with selected sheet data
+        columns = ["【不筛选】"] + list(self.df.columns)
+        self.email_combo.clear(); self.email_combo.addItems(self.df.columns)
+        self.name_combo.clear(); self.name_combo.addItems(self.df.columns)
+        for col_combo, _ in self.filters:
+            col_combo.clear(); col_combo.addItems(columns)
+        self.update_filtered_count()
+        
+        # Update toolbar variable dropdown with new Excel columns
+        if hasattr(self, 'toolbar') and self.toolbar:
+            self.toolbar.update_variable_dropdown(list(self.df.columns))
+        
+        # Update TinyMCE editor variable dropdown
+        self.body_editor.update_variable_dropdown(list(self.df.columns))
+        
+        # Update preview data with first row from selected sheet
+        self._update_preview_data()
+        
+    def _clear_layout(self, layout):
+        """Helper method to clear all widgets from a layout"""
+        while layout.count():
+            child = layout.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
+            elif child.layout():
+                self._clear_layout(child.layout())
 
     def get_filtered_df(self):
         if self.df is None: return None

@@ -17,7 +17,7 @@ if __name__ == "__main__":
     
     gui = MailerApp()
     
-    # Show the window
+    # Show the window first for better perceived performance
     gui.show()
     
     # Fix window position and flags after showing
@@ -28,9 +28,15 @@ if __name__ == "__main__":
         if hasattr(gui, '_normalize_window_flags_and_geometry'):
             gui._normalize_window_flags_and_geometry()
     
-    QTimer.singleShot(100, fix_window)
+    # Initialize heavy components after UI is visible
+    def initialize_components():
+        # Initialize TinyMCE editor
+        if hasattr(gui, '_initialize_editor'):
+            gui._initialize_editor()
+        # Set theme (reduced delay)
+        gui.set_theme(gui.settings.get("theme", "Light"))
     
-    # Set theme after a delay to ensure TinyMCE is loaded
-    QTimer.singleShot(2000, lambda: gui.set_theme(gui.settings.get("theme", "Light")))
+    QTimer.singleShot(50, fix_window)  # Reduced delay
+    QTimer.singleShot(100, initialize_components)  # Much shorter delay
     
     sys.exit(app.exec())

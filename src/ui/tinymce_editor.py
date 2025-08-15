@@ -55,11 +55,29 @@ class TinyMCEEditor(QWidget):
         # Connect signal
         self.bridge.contentChangedSignal.connect(self.on_content_changed)
         
-        # Load TinyMCE HTML template
-        self.load_editor()
+        # Create placeholder content initially
+        self._editor_loaded = False
         
-        # Focus the editor after a delay to ensure it's loaded
-        QTimer.singleShot(3000, self.focus_editor)
+        # Load TinyMCE HTML template (deferred)
+        self._defer_editor_loading()
+        
+        # Focus the editor after a shorter delay
+        QTimer.singleShot(500, self.focus_editor)
+    
+    def _defer_editor_loading(self):
+        """Defer editor loading to improve startup performance"""
+        # Show placeholder initially
+        placeholder_html = """
+        <html>
+            <body style="font-family: Arial, sans-serif; padding: 20px; color: #666;">
+                <p>正在加载编辑器...</p>
+            </body>
+        </html>
+        """
+        self.web_view.setHtml(placeholder_html)
+        
+        # Load the actual editor after a short delay
+        QTimer.singleShot(50, self.load_editor)
     
     def load_editor(self):
         # Get the path to the HTML template
@@ -75,6 +93,11 @@ class TinyMCEEditor(QWidget):
             # Load the HTML file
             url = QUrl.fromLocalFile(html_path)
             self.web_view.load(url)
+            self._editor_loaded = True
+            
+            # Apply pending theme if one was set before editor was loaded
+            if hasattr(self, '_pending_theme'):
+                QTimer.singleShot(200, lambda: self.setTheme(self._pending_theme))
         else:
             print(f"Error: TinyMCE editor template not found at {html_path}")
     
@@ -168,8 +191,8 @@ class TinyMCEEditor(QWidget):
     def setTheme(self, theme):
         self._theme = theme
         theme_name = 'dark' if theme == 'Dark' else 'light'
-        # Use a timer to ensure the page is loaded before calling setTheme
-        QTimer.singleShot(1000, lambda: self.web_view.page().runJavaScript(f"if (typeof setTheme !== 'undefined') setTheme('{theme_name}')"))
+        # Use a shorter timer to ensure the page is loaded before calling setTheme
+        QTimer.singleShot(100, lambda: self.web_view.page().runJavaScript(f"if (typeof setTheme !== 'undefined') setTheme('{theme_name}')"))
     
     def get_content_async(self, callback):
         self.web_view.page().runJavaScript("getContent()", callback)
@@ -182,8 +205,8 @@ class TinyMCEEditor(QWidget):
         if excel_columns is None:
             excel_columns = []
         
-        # Convert column list to JavaScript array string
-        columns_js = str(excel_columns).replace("'", '"')
+        # Convert column list to JavaScript array string using json.dumps for proper escaping
+        columns_js = json.dumps(excel_columns, ensure_ascii=False)
         
         script = f"if (typeof updateVariableDropdown === 'function') {{ updateVariableDropdown({columns_js}); }}"
         self.web_view.page().runJavaScript(script)
