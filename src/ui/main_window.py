@@ -479,23 +479,33 @@ class MailerApp(QWidget):
         subject_layout.addWidget(self.subject_input)
         composition_layout.addLayout(subject_layout)
         
-        # Email body - make it vertically resizable with external toolbar
-        composition_layout.addWidget(QLabel("邮件正文:"))
+        # Email body - create label and toolbar on same line
+        label_toolbar_layout = QHBoxLayout()
         
-        # Create TinyMCE editor with external toolbar
+        # Add label on the left
+        body_label = QLabel("邮件正文:")
+        label_toolbar_layout.addWidget(body_label)
+        
+        # Add toolbar on the right side of the label
+        from src.ui.tinymce_toolbar import TinyMCEToolbar
+        self.tinymce_toolbar = TinyMCEToolbar()
+        self.tinymce_toolbar.set_editor(None)  # Will set after editor is created
+        label_toolbar_layout.addWidget(self.tinymce_toolbar, 1)  # Give toolbar space to expand
+        
+        # Add the label+toolbar layout to composition
+        composition_layout.addLayout(label_toolbar_layout)
+        
+        # Create TinyMCE editor with external toolbar (below the label+toolbar)
         self.body_editor = TinyMCEEditor(external_toolbar=True)
         self.body_editor.setPlaceholderText("例如：尊敬的 {{姓名}} 专家，您好！")
         
-        # Create and add external toolbar
-        from src.ui.tinymce_toolbar import TinyMCEToolbar
-        self.tinymce_toolbar = TinyMCEToolbar()
+        # Set the editor reference in toolbar
         self.tinymce_toolbar.set_editor(self.body_editor)
-        composition_layout.addWidget(self.tinymce_toolbar)
         
         # Set flexible size policy for full resizability
         self.body_editor.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.body_editor.setMinimumHeight(150)  # Lower minimum to allow more compression
-        # Add with stretch factor to make it take available space
+        # Add editor with stretch factor to take available space
         composition_layout.addWidget(self.body_editor, 1)
         
         # Attachments
