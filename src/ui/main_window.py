@@ -5,11 +5,11 @@ import requests, msal
 import jinja2
 from dotenv import load_dotenv
 from PySide6.QtWidgets import (
-    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
+    QApplication, QWidget, QMainWindow, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
     QTextEdit, QLineEdit, QFileDialog, QComboBox, QMessageBox, QFrame,
     QDialog, QProgressBar, QListWidget, QListWidgetItem, QStyle,
     QTableWidget, QTableWidgetItem, QHeaderView, QRadioButton, QButtonGroup, QCheckBox,
-    QScrollArea, QGroupBox, QTabWidget
+    QScrollArea, QGroupBox, QTabWidget, QSizePolicy
 )
 from PySide6.QtCore import QObject, Signal, QThread, Qt
 from PySide6.QtGui import (
@@ -117,6 +117,8 @@ class MailerApp(QWidget):
         self.personalized_attachments_map = {}
         self.user_groups = []
         self.selected_group_recipients = []
+        self.member_checkboxes = []  # Initialize member checkboxes list
+        self.last_sending_mode = "group"  # Default sending mode
         self.field_mapper = FieldMapper()  # Initialize field mapper
         self.token_cache = msal.SerializableTokenCache()
         if os.path.exists(TOKEN_CACHE_FILE):
@@ -180,16 +182,80 @@ class MailerApp(QWidget):
             self.body_editor.setTheme(theme)
         
         self._save_settings()
+        
+        # Re-normalize window flags after theme change (some platforms may trigger layout changes)
+        if hasattr(self, '_normalize_window_flags_and_geometry'):
+            self._normalize_window_flags_and_geometry()
 
 
+    def _normalize_window_flags_and_geometry(self):
+        """Normalize window flags and geometry to prevent stay-on-top issues"""
+        # Save current visibility state
+        was_visible = self.isVisible()
+        
+        # 1) Clear problematic flags based on current flags
+        flags = self.windowFlags()
+        for bad in (
+            Qt.WindowStaysOnTopHint,      # Stay on top
+            Qt.Tool,                       # Tool window (may stick to edges on macOS)
+            Qt.FramelessWindowHint,        # Frameless (can't drag, appears "stuck")
+            Qt.BypassWindowManagerHint,
+            Qt.Popup,
+            Qt.SplashScreen,               # Splash screen (can't be moved/resized)
+            Qt.SubWindow,                  # Sub window (might have constraints)
+        ):
+            flags &= ~bad
+
+        # 2) Ensure standard top-level window decorations are available
+        flags |= (
+            Qt.Window
+            | Qt.WindowTitleHint
+            | Qt.WindowSystemMenuHint
+            | Qt.WindowMinMaxButtonsHint
+            | Qt.WindowCloseButtonHint
+        )
+        
+        # Apply the flags
+        self.setWindowFlags(flags)
+        self.setWindowModality(Qt.NonModal)
+        
+        # Ensure window can be resized
+        self.setMinimumSize(600, 400)  # Set reasonable minimum size
+        self.setMaximumSize(16777215, 16777215)  # Remove any maximum size constraints
+        
+        # Only show if it was previously visible
+        if was_visible:
+            self.show()  # Use show() instead of showNormal()
+            
+            # Center window after showing
+            from PySide6.QtCore import QTimer
+            QTimer.singleShot(100, self._center_window)
+    
+    def _center_window(self):
+        """Center the window on screen, accounting for macOS menubar"""
+        screen = QGuiApplication.primaryScreen()
+        if screen:
+            available = screen.availableGeometry()
+            size = self.frameGeometry()
+            
+            # Center horizontally
+            x = (available.width() - size.width()) // 2 + available.x()
+            
+            # Position vertically with offset from top (to avoid menubar)
+            # Use 10% from top instead of centering to avoid menubar issues
+            y = available.y() + int(available.height() * 0.1)
+            
+            self.move(x, y)
+    
     def _build_ui(self):
         self.setWindowTitle('个性化邮件发送助手')
-        # Center window on screen instead of sticking to top
+        
+        # Set size policy to allow resizing
+        from PySide6.QtWidgets import QSizePolicy
+        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
+        
+        # Set initial size
         self.resize(900, 850)
-        screen = QGuiApplication.primaryScreen().geometry()
-        x = (screen.width() - 900) // 2
-        y = (screen.height() - 850) // 2
-        self.move(x, y)
         
         # Create main layout
         main_layout = QVBoxLayout(self)
@@ -236,7 +302,7 @@ class MailerApp(QWidget):
         # Connect tab change event to update variables
         self.tab_widget.currentChanged.connect(self._on_tab_changed)
         
-        # Don't initialize preview data at startup - wait for user action
+        # Don't normalize here - will be done after window is shown
 
     def _create_excel_tab(self):
         """Create the Excel file tab content"""
@@ -303,7 +369,7 @@ class MailerApp(QWidget):
         """Create the Microsoft 365 Groups tab content"""
         group_widget = QWidget()
         group_layout = QVBoxLayout(group_widget)
-        group_layout.setSpacing(15)
+        group_layout.setSpacing(10)
         group_layout.setContentsMargins(10, 10, 10, 10)
         
         # Section 1: Group Selection
@@ -317,6 +383,55 @@ class MailerApp(QWidget):
         group_btn_layout.addWidget(group_btn)
         group_btn_layout.addWidget(self.group_label, 1)
         group_section_layout.addLayout(group_btn_layout)
+        
+        # Section 2: Member List Display (new)
+        member_list_label = QLabel("群组成员列表:")
+        group_section_layout.addWidget(member_list_label)
+        
+        # Create scrollable area for member list
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setMinimumHeight(200)
+        scroll_area.setMaximumHeight(300)
+        
+        # Container widget for the member list
+        self.member_list_widget = QWidget()
+        self.member_list_layout = QVBoxLayout(self.member_list_widget)
+        self.member_list_layout.setSpacing(2)
+        self.member_list_layout.setContentsMargins(5, 5, 5, 5)
+        
+        # Add "Select All/None" checkbox at the top
+        select_all_layout = QHBoxLayout()
+        self.select_all_checkbox = QCheckBox("全选/取消全选")
+        self.select_all_checkbox.setChecked(True)  # Default to all selected
+        self.select_all_checkbox.stateChanged.connect(self.toggle_all_members)
+        select_all_layout.addWidget(self.select_all_checkbox)
+        select_all_layout.addStretch()
+        self.member_list_layout.addLayout(select_all_layout)
+        
+        # Add separator
+        separator = QFrame()
+        separator.setFrameShape(QFrame.Shape.HLine)
+        separator.setFrameShadow(QFrame.Shadow.Sunken)
+        self.member_list_layout.addWidget(separator)
+        
+        # Member checkboxes will be added here dynamically
+        self.member_checkboxes = []
+        
+        # Add placeholder text when no members
+        self.no_members_label = QLabel("请先选择群组以查看成员列表")
+        self.no_members_label.setStyleSheet("color: gray; padding: 20px;")
+        self.member_list_layout.addWidget(self.no_members_label)
+        
+        # Add stretch to push items to top
+        self.member_list_layout.addStretch()
+        
+        scroll_area.setWidget(self.member_list_widget)
+        group_section_layout.addWidget(scroll_area)
+        
+        # Member count label
+        self.member_count_label = QLabel("已选择: 0 位成员")
+        group_section_layout.addWidget(self.member_count_label)
         
         group_layout.addWidget(group_section)
         group_layout.addStretch()
@@ -487,7 +602,32 @@ class MailerApp(QWidget):
                 return
                 
         elif current_tab == 1:  # Group tab
-            if hasattr(self, 'selected_group_recipients') and self.selected_group_recipients:
+            # Check if we have member checkboxes (individual member mode)
+            if hasattr(self, 'member_checkboxes') and self.member_checkboxes:
+                # Use selected members from checkboxes
+                selected_members = self.get_selected_group_members()
+                if not selected_members:
+                    QMessageBox.warning(self, "提示", "请至少选择一位群组成员。")
+                    return
+                    
+                import pandas as pd
+                group_data = []
+                for recipient in selected_members:
+                    group_data.append({
+                        '姓名': recipient['name'],
+                        '邮箱': recipient['email'],
+                        'type': recipient.get('type', 'member'),
+                        '群组名称': recipient.get('group_name', ''),
+                        '群组描述': recipient.get('group_description', ''),
+                        '群组邮箱': recipient.get('group_email', ''),
+                        '成员类型': recipient.get('member_type', '成员'),
+                        '部门': recipient.get('department', ''),
+                        '职位': recipient.get('job_title', '')
+                    })
+                recipients_df = pd.DataFrame(group_data)
+                recipient_source = "group"
+            elif hasattr(self, 'selected_group_recipients') and self.selected_group_recipients:
+                # Fallback to original behavior (group email mode)
                 import pandas as pd
                 group_data = []
                 for recipient in self.selected_group_recipients:
@@ -571,7 +711,11 @@ class MailerApp(QWidget):
         self.df = None
         self.user_groups = []
         self.selected_group_recipients = []
+        self.last_sending_mode = "group"  # Reset to default
         self.group_label.setText("未选择群组收件人")
+        # Clear member list
+        if hasattr(self, 'populate_member_list'):
+            self.populate_member_list([])
         print("界面已彻底重置，准备下一个任务。")
         
     def _end_thread(self):
@@ -599,16 +743,35 @@ class MailerApp(QWidget):
             QMessageBox.information(self, "提示", "未找到您有权访问的Microsoft 365群组")
             return
         
-        dialog = GroupSelectionDialog(self.user_groups, self)
+        # Pass previous selections and sending mode to dialog
+        previous_sending_mode = getattr(self, 'last_sending_mode', 'group')
+        dialog = GroupSelectionDialog(
+            self.user_groups, 
+            self, 
+            previous_selections=self.selected_group_recipients,
+            previous_sending_mode=previous_sending_mode
+        )
         if dialog.exec() == QDialog.Accepted:
             self.selected_group_recipients = dialog.selected_recipients
+            # Store the sending mode for next time
+            self.last_sending_mode = dialog.sending_mode
             
             if self.selected_group_recipients:
                 recipient_count = len(self.selected_group_recipients)
+                print(f"[DEBUG] Dialog sending mode: {dialog.sending_mode}")
                 if dialog.sending_mode == "group":
                     self.group_label.setText(f"已选择 {recipient_count} 个群组邮箱")
-                else:
+                    # Clear member list for group mode
+                    self.populate_member_list([])
+                elif dialog.sending_mode == "members":
                     self.group_label.setText(f"已选择 {recipient_count} 位群组成员")
+                    # Populate member list with individual members
+                    print(f"[DEBUG] Populating member list with {len(self.selected_group_recipients)} members")
+                    self.populate_member_list(self.selected_group_recipients)
+                else:
+                    print(f"[DEBUG] Unknown sending mode: {dialog.sending_mode}")
+                    self.group_label.setText(f"已选择 {recipient_count} 位收件人")
+                    self.populate_member_list(self.selected_group_recipients)
                 
                 # Debug: Print selected recipients to verify data
                 print(f"[DEBUG] Selected {recipient_count} recipients")
@@ -616,10 +779,135 @@ class MailerApp(QWidget):
                     print(f"[DEBUG] First recipient: {self.selected_group_recipients[0]}")
             else:
                 self.group_label.setText("未选择群组收件人")
+                self.populate_member_list([])
             
             # Update preview data with group data - add a small delay to ensure data is ready
             from PySide6.QtCore import QTimer
             QTimer.singleShot(100, self._update_preview_data)
+    
+    def populate_member_list(self, members):
+        """Populate the member list with checkboxes"""
+        # Clear existing member widgets properly
+        # Get all widgets except the fixed ones (select_all, separator, no_members_label, stretch)
+        items_to_remove = []
+        for i in range(self.member_list_layout.count()):
+            item = self.member_list_layout.itemAt(i)
+            if item and item.widget():
+                widget = item.widget()
+                # Don't remove our fixed widgets
+                if widget not in [self.select_all_checkbox.parent(), self.no_members_label]:
+                    # Check if this widget contains checkboxes
+                    if hasattr(widget, 'findChildren') and widget.findChildren(QCheckBox):
+                        items_to_remove.append(widget)
+        
+        # Remove the member widgets
+        for widget in items_to_remove:
+            widget.setParent(None)
+            widget.deleteLater()
+        
+        # Clear checkbox list
+        self.member_checkboxes.clear()
+        
+        # Hide/show the placeholder
+        if members:
+            self.no_members_label.hide()
+            print(f"[DEBUG] Adding {len(members)} members to list")
+        else:
+            self.no_members_label.show()
+            self.member_count_label.setText("已选择: 0 位成员")
+            print("[DEBUG] No members to display")
+            return
+        
+        # Add member checkboxes
+        for i, member in enumerate(members):
+            # Create a container widget for each member
+            member_widget = QWidget()
+            member_layout = QHBoxLayout(member_widget)
+            member_layout.setContentsMargins(20, 5, 5, 5)
+            member_layout.setSpacing(10)
+            
+            # Create checkbox
+            checkbox = QCheckBox()
+            checkbox.setChecked(True)  # Default to checked
+            
+            # Store member data with checkbox
+            checkbox.member_data = member
+            
+            # Create label with name and email on same line
+            name = member.get('name', '未知姓名')
+            email = member.get('email', '未知邮箱')
+            member_info = QLabel(f"{name} ({email})")
+            member_info.setWordWrap(False)  # Keep on one line
+            member_info.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+            
+            # Add widgets to layout
+            member_layout.addWidget(checkbox)
+            member_layout.addWidget(member_info)
+            member_layout.addStretch()
+            
+            # Add the member widget to the layout before the stretch
+            insert_index = self.member_list_layout.count() - 1  # Before the stretch
+            self.member_list_layout.insertWidget(insert_index, member_widget)
+            
+            # Connect the signal using a lambda to avoid signal conflicts
+            checkbox.stateChanged.connect(lambda state, cb=checkbox: self.on_member_checkbox_changed(cb))
+            
+            self.member_checkboxes.append(checkbox)
+            print(f"[DEBUG] Added member {i+1}: {name}")
+        
+        # Update count
+        self.update_member_selection_count()
+        print(f"[DEBUG] Final member list has {len(self.member_checkboxes)} checkboxes")
+    
+    def on_member_checkbox_changed(self, checkbox):
+        """Handle individual member checkbox changes"""
+        print(f"[DEBUG] Checkbox changed: {checkbox.isChecked()}")
+        self.update_member_selection_count()
+    
+    def toggle_all_members(self, state):
+        """Toggle all member checkboxes"""
+        is_checked = state == 2  # Qt.Checked = 2
+        print(f"[DEBUG] Toggle all members: {is_checked}")
+        
+        # Set all checkboxes - the lambda connection should handle this cleanly
+        for checkbox in self.member_checkboxes:
+            checkbox.setChecked(is_checked)
+        
+        # Update count will be called by individual checkbox signals
+    
+    def update_member_selection_count(self):
+        """Update the count of selected members"""
+        selected_count = sum(1 for cb in self.member_checkboxes if cb.isChecked())
+        total_count = len(self.member_checkboxes)
+        self.member_count_label.setText(f"已选择: {selected_count}/{total_count} 位成员")
+        
+        # Update select all checkbox state without triggering its signal
+        try:
+            self.select_all_checkbox.stateChanged.disconnect()
+        except TypeError:
+            # Already disconnected or no connections
+            pass
+        
+        if selected_count == 0:
+            self.select_all_checkbox.setChecked(False)
+        elif selected_count == total_count:
+            self.select_all_checkbox.setChecked(True)
+        else:
+            # Set to partially checked state
+            self.select_all_checkbox.setTristate(True)
+            self.select_all_checkbox.setCheckState(Qt.CheckState.PartiallyChecked)
+            self.select_all_checkbox.setTristate(False)
+        
+        # Reconnect the signal
+        self.select_all_checkbox.stateChanged.connect(self.toggle_all_members)
+    
+    def get_selected_group_members(self):
+        """Get list of selected members from checkboxes"""
+        selected_members = []
+        for checkbox in self.member_checkboxes:
+            if checkbox.isChecked() and hasattr(checkbox, 'member_data'):
+                selected_members.append(checkbox.member_data)
+        return selected_members
 
     def _update_preview_data(self):
         """Update preview data for the rich text editor with first instance data based on active tab"""
@@ -764,7 +1052,11 @@ class MailerApp(QWidget):
             expert_names = self.df[name_col].unique()
             
         elif current_tab == 1:  # Group tab
-            if hasattr(self, 'selected_group_recipients') and self.selected_group_recipients:
+            # Check if we have member checkboxes (individual member mode)
+            if hasattr(self, 'member_checkboxes') and self.member_checkboxes:
+                selected_members = self.get_selected_group_members()
+                expert_names = [recipient['name'] for recipient in selected_members if recipient.get('name')]
+            elif hasattr(self, 'selected_group_recipients') and self.selected_group_recipients:
                 expert_names = [recipient['name'] for recipient in self.selected_group_recipients if recipient.get('name')]
             else:
                 if show_dialog: QMessageBox.warning(self, "提示", "请先选择群组收件人。"); return
@@ -777,3 +1069,4 @@ class MailerApp(QWidget):
         
         if show_dialog:
             dialog = VerificationDialog(self.personalized_attachments_map, self); dialog.exec()
+

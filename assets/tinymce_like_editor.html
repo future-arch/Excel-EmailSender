@@ -276,141 +276,64 @@
             color: #005a9e;
         }
         
-        /* Variable field styling - now allows formatting */
-        .variable-field {
-            position: relative;
-            white-space: nowrap;
+        .preview-error {
+            color: #d32f2f;
+            background-color: #ffcdd2;
+            padding: 1px 3px;
+            border-radius: 2px;
         }
         
-        .variable-field:hover {
-            background-color: rgba(187, 222, 251, 0.5) !important;
+        .dark .preview-error {
+            color: #f44336;
+            background-color: #ffcdd2;
         }
-        
-        /* Variable field selection styling */
-        .variable-field:focus,
-        .variable-field.selected {
-            outline: 2px solid #4f46e5;
-            outline-offset: 1px;
-        }
-        
-        
-        /* Dark theme */
-        .dark {
-            background: #1e1e1e;
-            color: #fff;
-        }
-        
-        .dark .toolbar {
-            background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
-            border-color: #374151;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-        }
-        
-        .dark #editor {
-            border-color: #374151;
-            background: #1e1e1e;
-        }
-        
-        .dark .toolbar-group {
-            border-color: #4b5563;
-        }
-        
-        .dark .toolbar-group::after {
-            background: linear-gradient(to bottom, transparent, #4b5563, transparent);
-        }
-        
-        .dark .toolbar button {
-            background: linear-gradient(145deg, #374151 0%, #1f2937 100%);
-            color: #f9fafb;
-            border-color: #4b5563;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.2);
-        }
-        
-        .dark .toolbar button:hover {
-            background: linear-gradient(145deg, #4b5563 0%, #374151 100%);
-            border-color: #818cf8;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-        }
-        
-        .dark .toolbar button.active {
-            background: linear-gradient(145deg, #6366f1 0%, #4f46e5 100%);
-            color: white;
-            border-color: #4f46e5;
-            box-shadow: 0 2px 4px rgba(99, 102, 241, 0.4);
-        }
-        
-        .dark .toolbar button.active:hover {
-            background: linear-gradient(145deg, #7c3aed 0%, #6d28d9 100%);
-            box-shadow: 0 3px 6px rgba(99, 102, 241, 0.5);
-        }
-        
-        .dark .toolbar select {
-            background: linear-gradient(145deg, #374151 0%, #1f2937 100%);
-            color: #f9fafb;
-            border-color: #4b5563;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.2);
-        }
-        
-        .dark .toolbar select:hover {
-            border-color: #818cf8;
-            background: linear-gradient(145deg, #4b5563 0%, #374151 100%);
-            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-        }
-        
-        .dark .toolbar select:focus {
-            border-color: #6366f1;
-            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
-        }
-        
-        .dark .toolbar input[type="color"] {
-            border-color: #4b5563;
-            background: #374151;
-        }
-        
-        .dark .toolbar input[type="color"]:hover {
-            border-color: #818cf8;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-        }
-        
+
         .dark #editor {
             background: #1e1e1e;
             color: #fff;
             caret-color: #fff !important;
         }
-        
-        /* Dark theme variable fields */
-        .dark .variable-field {
-            background-color: #1a237e !important;
-            color: #90caf9 !important;
-            border-color: #3f51b5 !important;
+
+        .dark .toolbar {
+            background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
+            border-color: #374151;
         }
-        
-        .dark .variable-field:hover {
-            background-color: #283593 !important;
-            border-color: #5c6bc0 !important;
+
+        .dark .toolbar-group {
+            border-color: #4b5563;
         }
-        
-        /* Preview value styling - minimal visual indicator */
-        .preview-value {
-            position: relative;
+
+        .dark .toolbar button {
+            background: linear-gradient(145deg, #374151 0%, #1f2937 100%);
+            color: #f9fafb;
+            border-color: #4b5563;
         }
-        
-        .preview-error {
-            color: #d32f2f;
+
+        .dark .toolbar button:hover {
+            background: linear-gradient(145deg, #4b5563 0%, #374151 100%);
+            border-color: #818cf8;
         }
-        
-        /* Dark theme preview values */
-        .dark .preview-value {
-            /* Inherit user formatting in dark theme */
+
+        .dark .toolbar button.active {
+            background: linear-gradient(145deg, #6366f1 0%, #4f46e5 100%);
+            border-color: #4f46e5;
         }
-        
-        .dark .preview-error {
-            color: #f44336;
+
+        .dark .toolbar select {
+            background: linear-gradient(145deg, #374151 0%, #1f2937 100%);
+            color: #f9fafb;
+            border-color: #4b5563;
         }
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(-10px); }
-            to { opacity: 1; transform: translateY(0); }
+
+        .dark .toolbar select:hover {
+            border-color: #818cf8;
         }
+
+        .dark .toolbar input[type="color"] {
+            border-color: #4b5563;
+            background: #374151;
+        }
+
     </style>
 </head>
 <body>
@@ -540,21 +463,15 @@
     <script>
         const editor = document.getElementById('editor');
         let isUpdating = false;
-        
-        // Focus editor on load and force cursor
+        let isPreviewMode = false;
+        let originalContent = '';
+        let previewData = {};
+
+        // Focus editor on load
         window.addEventListener('load', function() {
-            setTimeout(function() {
-                editor.focus();
-                // Force cursor position at start
-                const range = document.createRange();
-                const selection = window.getSelection();
-                range.setStart(editor.firstChild, 0);
-                range.collapse(true);
-                selection.removeAllRanges();
-                selection.addRange(range);
-            }, 100);
+            setTimeout(() => editor.focus(), 100);
         });
-        
+
         // Handle content changes
         editor.addEventListener('input', function() {
             if (!isUpdating && window.pybridge) {
@@ -562,11 +479,44 @@
             }
             updateToolbarState();
         });
-        
+
         editor.addEventListener('selectionchange', updateToolbarState);
         editor.addEventListener('keyup', updateToolbarState);
-        editor.addEventListener('mouseup', updateToolbarState);
-        
+        editor.addEventListener('mouseup', () => {
+            updateToolbarState();
+            handleSelectionOnMouseUp();
+        });
+
+        function handleSelectionOnMouseUp() {
+            const selection = window.getSelection();
+            if (selection.rangeCount > 0 && !isPreviewMode) {
+                const range = selection.getRangeAt(0);
+                const container = range.commonAncestorContainer;
+
+                // Check if the selection is collapsed (it's a click) and inside a text node
+                if (range.collapsed && container.nodeType === Node.TEXT_NODE) {
+                    const text = container.textContent;
+                    const placeholderRegex = /{{[^{}]+}}/g;
+                    let match;
+
+                    while ((match = placeholderRegex.exec(text)) !== null) {
+                        const startIndex = match.index;
+                        const endIndex = startIndex + match[0].length;
+
+                        // Check if the click was inside a placeholder
+                        if (range.startOffset > startIndex && range.startOffset < endIndex) {
+                            const newRange = document.createRange();
+                            newRange.setStart(container, startIndex);
+                            newRange.setEnd(container, endIndex);
+                            selection.removeAllRanges();
+                            selection.addRange(newRange);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
         // Command execution
         function execCommand(command, value = null) {
             editor.focus();
@@ -576,291 +526,44 @@
                 window.pybridge.contentChanged(editor.innerHTML);
             }
         }
-        
+
         function toggleFormat(command) {
-            editor.focus();
-            
-            const selection = window.getSelection();
-            if (selection.rangeCount > 0) {
-                const range = selection.getRangeAt(0);
-                
-                // Check if selection includes variable fields
-                const selectedContent = range.cloneContents();
-                const variableFields = selectedContent.querySelectorAll('.variable-field');
-                
-                if (variableFields.length > 0 || 
-                    (range.startContainer.parentElement && range.startContainer.parentElement.classList.contains('variable-field')) ||
-                    (range.endContainer.parentElement && range.endContainer.parentElement.classList.contains('variable-field'))) {
-                    
-                    // Apply formatting to variable fields directly
-                    applyFormatToVariableFields(range, command);
-                } else {
-                    // Standard formatting
-                    const isActive = document.queryCommandState(command);
-                    document.execCommand(command, false, null);
-                }
-            }
-            
-            updateToolbarState();
-            if (window.pybridge) {
-                window.pybridge.contentChanged(editor.innerHTML);
-            }
+            execCommand(command);
         }
-        
-        function applyFormatToVariableFields(range, command) {
-            // Get all elements in the selection
-            const container = range.commonAncestorContainer;
-            const walker = document.createTreeWalker(
-                container,
-                NodeFilter.SHOW_ELEMENT,
-                {
-                    acceptNode: function(node) {
-                        return node.classList && node.classList.contains('variable-field') ? 
-                            NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP;
-                    }
-                }
-            );
-            
-            const variableFields = [];
-            let node;
-            while (node = walker.nextNode()) {
-                if (range.intersectsNode(node)) {
-                    variableFields.push(node);
-                }
-            }
-            
-            // Apply formatting to each variable field
-            variableFields.forEach(field => {
-                switch(command) {
-                    case 'bold':
-                        field.style.fontWeight = field.style.fontWeight === 'bold' ? 'normal' : 'bold';
-                        break;
-                    case 'italic':
-                        field.style.fontStyle = field.style.fontStyle === 'italic' ? 'normal' : 'italic';
-                        break;
-                    case 'underline':
-                        field.style.textDecoration = field.style.textDecoration === 'underline' ? 'none' : 'underline';
-                        break;
-                    case 'strikethrough':
-                        field.style.textDecoration = field.style.textDecoration === 'line-through' ? 'none' : 'line-through';
-                        break;
-                }
-            });
-        }
-        
+
         function formatBlock(tag) {
-            if (tag) {
-                editor.focus();
-                const selection = window.getSelection();
-                const range = selection.getRangeAt(0);
-                
-                // Get the selected text or current line
-                let selectedText = selection.toString();
-                if (!selectedText) {
-                    // If no selection, select the current line
-                    range.expand('line');
-                    selectedText = range.toString();
-                }
-                
-                // Create new element with the tag
-                const newElement = document.createElement(tag);
-                newElement.textContent = selectedText || '新文本';
-                
-                // Replace selection with new element
-                range.deleteContents();
-                range.insertNode(newElement);
-                
-                // Position cursor after the new element
-                range.setStartAfter(newElement);
-                range.collapse(true);
-                selection.removeAllRanges();
-                selection.addRange(range);
-                
-                updateToolbarState();
-                if (window.pybridge) {
-                    window.pybridge.contentChanged(editor.innerHTML);
-                }
-            }
+            if (tag) execCommand('formatBlock', tag);
         }
-        
+
         function changeFontSize(size) {
-            if (size) {
-                editor.focus();
-                // Convert size number to actual pixel values
-                const sizeMap = {
-                    '1': '10px',
-                    '2': '12px', 
-                    '3': '14px',
-                    '4': '16px',
-                    '5': '18px',
-                    '6': '24px',
-                    '7': '32px'
-                };
-                const fontSize = sizeMap[size] || '14px';
-                
-                const selection = window.getSelection();
-                if (selection.rangeCount > 0) {
-                    const range = selection.getRangeAt(0);
-                    if (!range.collapsed) {
-                        // Text is selected
-                        const span = document.createElement('span');
-                        span.style.fontSize = fontSize;
-                        span.appendChild(range.extractContents());
-                        range.insertNode(span);
-                    } else {
-                        // No selection, apply to future text
-                        document.execCommand('fontSize', false, size);
-                    }
-                }
-                updateToolbarState();
-                if (window.pybridge) {
-                    window.pybridge.contentChanged(editor.innerHTML);
-                }
-            }
+            if (size) execCommand('fontSize', size);
         }
-        
+
         function changeFontFamily(family) {
-            if (family) {
-                editor.focus();
-                const selection = window.getSelection();
-                if (selection.rangeCount > 0) {
-                    const range = selection.getRangeAt(0);
-                    if (!range.collapsed) {
-                        // Text is selected, wrap it in a span with font-family
-                        const span = document.createElement('span');
-                        span.style.fontFamily = family;
-                        span.appendChild(range.extractContents());
-                        range.insertNode(span);
-                    } else {
-                        // No selection, apply to future text
-                        document.execCommand('fontName', false, family);
-                    }
-                }
-                updateToolbarState();
-                if (window.pybridge) {
-                    window.pybridge.contentChanged(editor.innerHTML);
-                }
-            }
+            if (family) execCommand('fontName', family);
         }
-        
+
         function changeForeColor(color) {
-            editor.focus();
-            const selection = window.getSelection();
-            if (selection.rangeCount > 0) {
-                const range = selection.getRangeAt(0);
-                
-                // Check if selection includes variable fields
-                const selectedContent = range.cloneContents();
-                const variableFields = selectedContent.querySelectorAll('.variable-field');
-                
-                if (variableFields.length > 0) {
-                    // Apply color to variable fields in the actual document
-                    applyColorToVariableFields(range, color, 'color');
-                } else if (!range.collapsed) {
-                    // Text is selected
-                    const span = document.createElement('span');
-                    span.style.color = color;
-                    span.appendChild(range.extractContents());
-                    range.insertNode(span);
-                } else {
-                    // No selection, apply to future text
-                    document.execCommand('foreColor', false, color);
-                }
-            }
-            updateToolbarState();
-            if (window.pybridge) {
-                window.pybridge.contentChanged(editor.innerHTML);
-            }
+            execCommand('foreColor', color);
         }
-        
-        function applyColorToVariableFields(range, color, property) {
-            // Get all variable fields in the selection
-            const container = range.commonAncestorContainer;
-            const walker = document.createTreeWalker(
-                container,
-                NodeFilter.SHOW_ELEMENT,
-                {
-                    acceptNode: function(node) {
-                        return node.classList && node.classList.contains('variable-field') ? 
-                            NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP;
-                    }
-                }
-            );
-            
-            const variableFields = [];
-            let node;
-            while (node = walker.nextNode()) {
-                if (range.intersectsNode(node)) {
-                    variableFields.push(node);
-                }
-            }
-            
-            // Apply color to each variable field
-            variableFields.forEach(field => {
-                if (property === 'color') {
-                    field.style.color = color;
-                } else if (property === 'backgroundColor') {
-                    field.style.backgroundColor = color;
-                }
-            });
-        }
-        
+
         function changeBackColor(color) {
-            editor.focus();
-            const selection = window.getSelection();
-            if (selection.rangeCount > 0) {
-                const range = selection.getRangeAt(0);
-                
-                // Check if selection includes variable fields
-                const selectedContent = range.cloneContents();
-                const variableFields = selectedContent.querySelectorAll('.variable-field');
-                
-                if (variableFields.length > 0) {
-                    // Apply background color to variable fields in the actual document
-                    applyColorToVariableFields(range, color, 'backgroundColor');
-                } else if (!range.collapsed) {
-                    // Text is selected
-                    const span = document.createElement('span');
-                    span.style.backgroundColor = color;
-                    span.appendChild(range.extractContents());
-                    range.insertNode(span);
-                } else {
-                    // No selection, apply to future text
-                    document.execCommand('backColor', false, color);
-                }
-            }
-            updateToolbarState();
-            if (window.pybridge) {
-                window.pybridge.contentChanged(editor.innerHTML);
-            }
+            execCommand('backColor', color);
         }
-        
+
         function insertLink() {
-            editor.focus();
-            const url = prompt('请输入链接地址:', 'http://');
-            if (url && url !== 'http://') {
-                const text = window.getSelection().toString() || prompt('请输入链接文字:', url);
-                if (text) {
-                    document.execCommand('insertHTML', false, `<a href="${url}" target="_blank">${text}</a>`);
-                    if (window.pybridge) {
-                        window.pybridge.contentChanged(editor.innerHTML);
-                    }
-                }
+            const url = prompt('请输入链接地址:', 'https://');
+            if (url && url !== 'https://') {
+                execCommand('createLink', url);
             }
         }
-        
+
         function insertTable() {
-            editor.focus();
             const rows = prompt('行数:', '3');
             const cols = prompt('列数:', '3');
             if (rows && cols && rows > 0 && cols > 0) {
-                let tableHTML = '<table>';
-                tableHTML += '<thead><tr>';
-                for (let c = 0; c < cols; c++) {
-                    tableHTML += '<th>标题 ' + (c + 1) + '</th>';
-                }
-                tableHTML += '</tr></thead><tbody>';
-                for (let r = 1; r < rows; r++) {
+                let tableHTML = '<table><tbody>';
+                for (let r = 0; r < rows; r++) {
                     tableHTML += '<tr>';
                     for (let c = 0; c < cols; c++) {
                         tableHTML += '<td>单元格</td>';
@@ -868,576 +571,118 @@
                     tableHTML += '</tr>';
                 }
                 tableHTML += '</tbody></table><p><br></p>';
-                document.execCommand('insertHTML', false, tableHTML);
-                if (window.pybridge) {
-                    window.pybridge.contentChanged(editor.innerHTML);
-                }
+                execCommand('insertHTML', tableHTML);
             }
         }
-        
-        let isSourceMode = false;
-        function toggleSource() {
-            if (isSourceMode) {
-                // Switch back to visual mode
-                const sourceContent = editor.textContent;
-                editor.innerHTML = sourceContent;
-                editor.contentEditable = true;
-                isSourceMode = false;
-                document.querySelector('button[onclick="toggleSource()"]').textContent = '</>';
-            } else {
-                // Switch to source mode
-                const htmlContent = editor.innerHTML;
-                editor.textContent = htmlContent;
-                editor.contentEditable = true;
-                isSourceMode = true;
-                document.querySelector('button[onclick="toggleSource()"]').textContent = '👁';
-            }
-            editor.focus();
-        }
-        
+
         function insertVariable(variable) {
             if (variable) {
-                editor.focus();
-                
-                const selection = window.getSelection();
-                if (selection.rangeCount > 0) {
-                    const range = selection.getRangeAt(0);
-                    
-                    // Get current formatting from the cursor position
-                    let currentElement = range.startContainer;
-                    if (currentElement.nodeType === Node.TEXT_NODE) {
-                        currentElement = currentElement.parentNode;
-                    }
-                    
-                    // Create a styled span for the variable that inherits formatting
-                    const span = document.createElement('span');
-                    span.textContent = variable;
-                    span.className = 'variable-field';
-                    
-                    // Copy current text formatting from parent element
-                    const computedStyle = window.getComputedStyle(currentElement);
-                    span.style.fontFamily = computedStyle.fontFamily;
-                    span.style.fontSize = computedStyle.fontSize;
-                    span.style.fontWeight = computedStyle.fontWeight;
-                    span.style.fontStyle = computedStyle.fontStyle;
-                    span.style.textDecoration = computedStyle.textDecoration;
-                    span.style.color = computedStyle.color;
-                    
-                    // Add subtle background to distinguish variables (but allow styling)
-                    span.style.backgroundColor = 'rgba(227, 242, 253, 0.3)';
-                    span.style.padding = '1px 3px';
-                    span.style.borderRadius = '2px';
-                    span.style.border = '1px solid rgba(187, 222, 251, 0.5)';
-                    span.style.display = 'inline';
-                    span.style.cursor = 'default';
-                    
-                    // Make variable fields selectable for formatting but not editable
-                    span.contentEditable = false;
-                    span.style.userSelect = 'text';
-                    
-                    // Insert the variable
-                    range.deleteContents();
-                    range.insertNode(span);
-                    
-                    // Ensure there's always editable space after the variable
-                    ensureEditableSpaceAfter(span);
-                    
-                    // Position cursor after the variable
-                    range.setStartAfter(span);
-                    range.collapse(true);
-                    selection.removeAllRanges();
-                    selection.addRange(range);
-                }
-                
-                if (window.pybridge) {
-                    window.pybridge.contentChanged(editor.innerHTML);
-                }
+                execCommand('insertText', variable);
             }
         }
-        
+
         function insertEmoji(emoji) {
-            editor.focus();
-            document.execCommand('insertText', false, emoji);
-            if (window.pybridge) {
-                window.pybridge.contentChanged(editor.innerHTML);
-            }
+            execCommand('insertText', emoji);
         }
-        
+
+        function toggleSource() {
+            alert('Source view is not implemented in this version.');
+        }
+
         function updateToolbarState() {
-            // Update button states based on current selection
             const commands = ['bold', 'italic', 'underline', 'strikethrough'];
             commands.forEach(cmd => {
                 const btn = document.querySelector(`button[onclick*="${cmd}"]`);
                 if (btn) {
-                    const isActive = document.queryCommandState(cmd);
-                    btn.classList.toggle('active', isActive);
+                    btn.classList.toggle('active', document.queryCommandState(cmd));
                 }
             });
         }
-        
-        // Functions for Python communication
+
+        // --- Preview Logic ---
+        function togglePreview() {
+            if (!isPreviewMode && Object.keys(previewData).length === 0) {
+                alert('没有可预览的数据。请先加载Excel文件或选择M365群组。');
+                return;
+            }
+            isPreviewMode ? exitPreviewMode() : enterPreviewMode();
+        }
+
+        function enterPreviewMode() {
+            originalContent = editor.innerHTML;
+            let previewContent = originalContent;
+
+            Object.keys(previewData).forEach(key => {
+                const placeholder = `{{${key}}}`;
+                const value = previewData[key] || `<span class="preview-error">[${key} 未找到]</span>`;
+                previewContent = previewContent.replace(new RegExp(escapeRegExp(placeholder), 'g'), value);
+            });
+
+            editor.innerHTML = previewContent;
+            editor.contentEditable = false;
+            document.getElementById('previewBtn').textContent = '✏️';
+            document.getElementById('previewBtn').title = '返回编辑模式';
+            isPreviewMode = true;
+        }
+
+        function exitPreviewMode() {
+            editor.innerHTML = originalContent;
+            editor.contentEditable = true;
+            document.getElementById('previewBtn').textContent = '👁';
+            document.getElementById('previewBtn').title = '预览邮件内容';
+            isPreviewMode = false;
+        }
+
+        function escapeRegExp(string) {
+            return string.replace(/[.*+?^${}()|[\\]/g, '\\$&');
+        }
+
+        // --- Python Communication ---
         function setContent(html) {
             isUpdating = true;
             editor.innerHTML = html || '<p><br></p>';
             isUpdating = false;
         }
-        
+
         function getContent() {
             return editor.innerHTML;
         }
-        
+
         function getPlainText() {
             return editor.innerText || editor.textContent;
         }
-        
+
         function clearContent() {
-            isUpdating = true;
-            editor.innerHTML = '<p><br></p>';
-            isUpdating = false;
-            editor.focus();
+            setContent('');
         }
-        
+
         function focusEditor() {
             editor.focus();
-            // Force cursor visibility
-            setTimeout(function() {
-                const range = document.createRange();
-                const selection = window.getSelection();
-                if (editor.firstChild) {
-                    range.setStart(editor.firstChild, 0);
-                    range.collapse(true);
-                    selection.removeAllRanges();
-                    selection.addRange(range);
-                }
-            }, 10);
         }
-        
+
         function setTheme(theme) {
-            if (theme === 'dark') {
-                document.body.classList.add('dark');
-            } else {
-                document.body.classList.remove('dark');
-            }
+            document.body.classList.toggle('dark', theme === 'dark');
         }
-        
+
+        function setPreviewData(data) {
+            previewData = data || {};
+        }
+
         function updateVariableDropdown(excelColumns) {
-            const select = document.getElementById('variableSelect');
             const excelGroup = document.getElementById('excelColumns');
-            
-            // Clear existing Excel columns
             excelGroup.innerHTML = '';
-            
             if (excelColumns && excelColumns.length > 0) {
-                // Add Excel columns to dropdown
                 excelColumns.forEach(column => {
                     const option = document.createElement('option');
                     option.value = `{{${column}}}`;
                     option.textContent = `{{${column}}} - Excel列`;
                     excelGroup.appendChild(option);
                 });
-                
-                // Show Excel columns group
                 excelGroup.style.display = 'block';
             } else {
-                // Hide Excel columns group
                 excelGroup.style.display = 'none';
             }
         }
-        
-        // Preview functionality
-        let isPreviewMode = false;
-        let originalContent = '';
-        let previewData = {};
-        
-        function setPreviewData(data) {
-            previewData = data;
-            console.log('Preview data set:', data);
-            // Debug alert to see when data is being set
-            console.log(`setPreviewData called with ${Object.keys(data).length} keys:`, Object.keys(data));
-        }
-        
-        function togglePreview() {
-            console.log('Toggle preview clicked, current mode:', isPreviewMode);
-            console.log('Current preview data:', previewData);
-            console.log(`Preview data keys: ${Object.keys(previewData).join(', ')}`);
-            console.log(`Data count: ${Object.keys(previewData).length}`);
-            
-            if (Object.keys(previewData).length === 0) {
-                alert('没有可预览的数据。请先加载Excel文件或选择M365群组。');
-                return;
-            }
-            
-            const previewBtn = document.getElementById('previewBtn');
-            
-            if (isPreviewMode) {
-                // Switch back to edit mode
-                exitPreviewMode();
-            } else {
-                // Switch to preview mode
-                enterPreviewMode();
-            }
-        }
-        
-        function enterPreviewMode() {
-            console.log('=== ENTERING PREVIEW MODE ===');
-            console.log('Preview data available:', previewData);
-            console.log('Preview data keys:', Object.keys(previewData));
-            
-            // Store original content
-            originalContent = editor.innerHTML;
-            console.log('Original content:', originalContent);
-            
-            // Create a copy of the content for preview
-            let previewContent = originalContent;
-            
-            // Replace all variables with their preview values
-            Object.keys(previewData).forEach(key => {
-                const variable = `{{${key}}}`;
-                const value = previewData[key] || `[空值]`;
-                
-                // Create regex that matches the variable in any context
-                // This handles variables in spans, plain text, and any HTML structure
-                const regex = new RegExp(escapeRegExp(variable), 'g');
-                
-                // Count occurrences for debugging
-                const occurrences = (previewContent.match(regex) || []).length;
-                if (occurrences > 0) {
-                    console.log(`Found ${occurrences} occurrences of ${variable}, replacing with: ${value}`);
-                    
-                    // Replace with styled preview value
-                    const replacement = `<span class="preview-value" style="background-color: #e8f5e8; color: #2e7d32; padding: 2px 6px; border-radius: 3px; font-weight: bold; border: 1px solid #a5d6a7; display: inline;">${value}</span>`;
-                    previewContent = previewContent.replace(regex, replacement);
-                }
-            });
-            
-            // Also handle variables that might be in the variable-field spans
-            // Parse the HTML to handle styled variables
-            const tempDiv = document.createElement('div');
-            tempDiv.innerHTML = previewContent;
-            
-            // Find all variable-field spans and replace their content
-            const variableSpans = tempDiv.querySelectorAll('.variable-field');
-            console.log(`Found ${variableSpans.length} variable-field spans`);
-            
-            variableSpans.forEach(span => {
-                const spanText = span.textContent;
-                console.log(`Checking variable span: "${spanText}"`);
-                
-                // Extract variable name from {{variableName}} format
-                const match = spanText.match(/^{{(.+)}}$/);
-                if (match) {
-                    const variableName = match[1];
-                    if (previewData.hasOwnProperty(variableName)) {
-                        const value = previewData[variableName] || `[空值]`;
-                        console.log(`Replacing variable span ${spanText} with ${value}`);
-                        
-                        // Preserve all existing formatting and just change the text content
-                        const newSpan = span.cloneNode(false); // Clone without children but with attributes
-                        newSpan.textContent = value;
-                        newSpan.className = span.className + ' preview-value';
-                        
-                        // Copy all inline styles from original span
-                        newSpan.style.cssText = span.style.cssText;
-                        
-                        // Add subtle preview indicator (green tint) without overriding user formatting
-                        const currentBg = span.style.backgroundColor || '';
-                        if (!currentBg || currentBg === 'transparent' || currentBg.includes('rgba(227, 242, 253')) {
-                            newSpan.style.backgroundColor = 'rgba(232, 245, 232, 0.8)';
-                        } else {
-                            // Keep existing background and add green border
-                            newSpan.style.boxShadow = 'inset 0 0 0 1px rgba(76, 175, 80, 0.5)';
-                        }
-                        
-                        span.replaceWith(newSpan);
-                    } else {
-                        // Variable not found in data - preserve formatting but show error
-                        span.textContent = `[未知: ${variableName}]`;
-                        span.className = span.className + ' preview-value preview-error';
-                        span.style.boxShadow = 'inset 0 0 0 1px rgba(244, 67, 54, 0.5)';
-                    }
-                }
-            });
-            
-            // Update the editor with the preview content
-            editor.innerHTML = tempDiv.innerHTML;
-            
-            // Disable editing in preview mode
-            editor.contentEditable = false;
-            editor.style.backgroundColor = '#f5f5f5';
-            editor.style.border = '2px solid #4CAF50';
-            editor.style.boxShadow = 'inset 0 0 5px rgba(76, 175, 80, 0.2)';
-            
-            // Update button
-            const previewBtn = document.getElementById('previewBtn');
-            previewBtn.textContent = '✏️';
-            previewBtn.title = '返回编辑模式';
-            previewBtn.style.background = 'linear-gradient(145deg, #4CAF50 0%, #45a049 100%)';
-            previewBtn.style.color = 'white';
-            
-            isPreviewMode = true;
-            
-            // Show a notification
-            const notification = document.createElement('div');
-            notification.style.cssText = 'position: absolute; top: 10px; right: 10px; background: #4CAF50; color: white; padding: 8px 16px; border-radius: 4px; font-size: 12px; z-index: 1000; animation: fadeIn 0.3s;';
-            notification.textContent = '预览模式 - 显示实际数据';
-            editor.parentElement.appendChild(notification);
-            setTimeout(() => notification.remove(), 3000);
-        }
-        
-        function exitPreviewMode() {
-            // Restore original content
-            editor.innerHTML = originalContent;
-            
-            // Enable editing
-            editor.contentEditable = true;
-            editor.style.backgroundColor = '';
-            editor.style.border = '';
-            editor.style.boxShadow = '';
-            
-            // Update button
-            const previewBtn = document.getElementById('previewBtn');
-            previewBtn.textContent = '👁';
-            previewBtn.title = '预览邮件内容';
-            previewBtn.style.background = '';
-            previewBtn.style.color = '';
-            
-            isPreviewMode = false;
-            
-            // Show a notification
-            const notification = document.createElement('div');
-            notification.style.cssText = 'position: absolute; top: 10px; right: 10px; background: #2196F3; color: white; padding: 8px 16px; border-radius: 4px; font-size: 12px; z-index: 1000; animation: fadeIn 0.3s;';
-            notification.textContent = '编辑模式 - 可以修改内容';
-            editor.parentElement.appendChild(notification);
-            setTimeout(() => notification.remove(), 2000);
-        }
-        
-        function escapeRegExp(string) {
-            return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        }
-        
-        
-        // Ensure cursor is always visible with multiple methods
-        setInterval(function() {
-            if (document.activeElement === editor) {
-                editor.style.caretColor = document.body.classList.contains('dark') ? '#fff' : '#000';
-            }
-        }, 100);
-        
-        // Handle placeholder
-        editor.addEventListener('focus', function() {
-            if (editor.innerHTML === '<p><br></p>' || editor.innerHTML === '') {
-                editor.innerHTML = '<p><br></p>';
-            }
-        });
-        
-        editor.addEventListener('blur', function() {
-            if (editor.innerHTML === '<p><br></p>') {
-                // Keep the paragraph for proper cursor positioning
-            }
-        });
-        
-        // Handle clicks on or near variable fields
-        editor.addEventListener('click', function(event) {
-            const target = event.target;
-            
-            // If clicked on a variable field, allow selection for formatting
-            if (target.classList && target.classList.contains('variable-field')) {
-                // Don't prevent default - allow selection
-                // Just ensure there's space after for cursor movement
-                ensureEditableSpaceAfter(target);
-                editor.focus();
-            }
-        });
-        
-        // Function to ensure there's always editable space after a variable field
-        function ensureEditableSpaceAfter(variableField) {
-            const nextSibling = variableField.nextSibling;
-            const parent = variableField.parentNode;
-            
-            // Always ensure there's a space after a variable field for cursor positioning
-            if (!nextSibling || 
-                (nextSibling.nodeType === Node.ELEMENT_NODE && nextSibling.classList && nextSibling.classList.contains('variable-field')) ||
-                (nextSibling.nodeType === Node.TEXT_NODE && nextSibling.textContent.length === 0) ||
-                (nextSibling.nodeType === Node.ELEMENT_NODE && nextSibling.tagName === 'BR')) {
-                
-                // Remove any empty text nodes or BR tags next to the variable field
-                if (nextSibling && 
-                    ((nextSibling.nodeType === Node.TEXT_NODE && nextSibling.textContent.length === 0) ||
-                     (nextSibling.nodeType === Node.ELEMENT_NODE && nextSibling.tagName === 'BR'))) {
-                    nextSibling.remove();
-                }
-                
-                // Add a proper space for cursor positioning
-                const spaceNode = document.createTextNode(' '); // Regular space for cursor positioning
-                if (variableField.nextSibling) {
-                    parent.insertBefore(spaceNode, variableField.nextSibling);
-                } else {
-                    parent.appendChild(spaceNode);
-                }
-            }
-            
-            // Special handling for variables at the end of their container (first line issue)
-            const isLastInParent = !variableField.nextSibling || 
-                (variableField.nextSibling && variableField.nextSibling.nodeType === Node.TEXT_NODE && 
-                 variableField.nextSibling.textContent.length <= 1);
-            
-            if (isLastInParent) {
-                // Check if the parent is the editor or a paragraph/div within the editor
-                const isAtEndOfContainer = parent === editor || 
-                    (parent.parentNode === editor && parent.tagName && 
-                     ['P', 'DIV', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6'].includes(parent.tagName.toUpperCase()));
-                
-                if (isAtEndOfContainer) {
-                    // Ensure there's always proper space at the end for cursor positioning
-                    let existingSpace = variableField.nextSibling;
-                    
-                    // If there's no space or only a BR, create proper space
-                    if (!existingSpace || 
-                        (existingSpace.nodeType === Node.ELEMENT_NODE && existingSpace.tagName === 'BR') ||
-                        (existingSpace.nodeType === Node.TEXT_NODE && existingSpace.textContent.length === 0)) {
-                        
-                        // Remove BR if present
-                        if (existingSpace && existingSpace.nodeType === Node.ELEMENT_NODE && existingSpace.tagName === 'BR') {
-                            existingSpace.remove();
-                        }
-                        
-                        // Add regular space for reliable cursor positioning
-                        const spaceNode = document.createTextNode(' ');
-                        parent.appendChild(spaceNode);
-                    } else if (existingSpace && existingSpace.nodeType === Node.TEXT_NODE && existingSpace.textContent.length > 0) {
-                        // Ensure the existing text node ends with a space
-                        if (!existingSpace.textContent.endsWith(' ')) {
-                            existingSpace.textContent += ' ';
-                        }
-                    }
-                }
-            }
-        }
-        
-        // Handle keyboard navigation around variable fields
-        editor.addEventListener('keydown', function(event) {
-            const selection = window.getSelection();
-            if (selection.rangeCount === 0) return;
-            
-            const range = selection.getRangeAt(0);
-            const startContainer = range.startContainer;
-            
-            // Handle Arrow Right key specifically for end-of-line navigation
-            if (event.key === 'ArrowRight') {
-                const isAtEndOfTextNode = startContainer.nodeType === Node.TEXT_NODE && 
-                    range.startOffset >= startContainer.textContent.length;
-                
-                if (isAtEndOfTextNode) {
-                    const nextSibling = startContainer.nextSibling;
-                    if (nextSibling && nextSibling.classList && nextSibling.classList.contains('variable-field')) {
-                        // Ensure space after this variable field for proper navigation
-                        ensureEditableSpaceAfter(nextSibling);
-                    }
-                }
-            }
-            
-            // If cursor is inside a variable field, move it outside
-            if (startContainer.nodeType === Node.ELEMENT_NODE && 
-                startContainer.classList && 
-                startContainer.classList.contains('variable-field')) {
-                
-                event.preventDefault();
-                const newRange = document.createRange();
-                
-                if (event.key === 'ArrowLeft' || event.key === 'Backspace') {
-                    newRange.setStartBefore(startContainer);
-                } else {
-                    // Ensure there's space after before moving cursor
-                    ensureEditableSpaceAfter(startContainer);
-                    newRange.setStartAfter(startContainer);
-                }
-                
-                newRange.collapse(true);
-                selection.removeAllRanges();
-                selection.addRange(newRange);
-            }
-            
-            // Handle End key or Ctrl+End to ensure cursor can go to actual end
-            if (event.key === 'End' || (event.ctrlKey && event.key === 'End')) {
-                event.preventDefault();
-                
-                // Get the current line/paragraph the cursor is in
-                const currentRange = selection.getRangeAt(0);
-                let currentLine = currentRange.startContainer;
-                
-                // Find the containing paragraph or div
-                while (currentLine && currentLine !== editor && 
-                       (!currentLine.tagName || !['P', 'DIV', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6'].includes(currentLine.tagName.toUpperCase()))) {
-                    currentLine = currentLine.parentNode;
-                }
-                
-                if (!currentLine || currentLine === editor) {
-                    // If no specific line container, use the editor itself
-                    currentLine = editor;
-                }
-                
-                // Find the last node in this line that should be editable
-                let lastNode = currentLine.lastChild;
-                while (lastNode && lastNode.nodeType === Node.ELEMENT_NODE && lastNode.classList && lastNode.classList.contains('variable-field')) {
-                    // If the last node is a variable field, ensure there's space after it
-                    ensureEditableSpaceAfter(lastNode);
-                    lastNode = lastNode.nextSibling || lastNode;
-                }
-                
-                // Set cursor to the very end of the current line
-                const newRange = document.createRange();
-                if (lastNode && lastNode.nodeType === Node.TEXT_NODE) {
-                    newRange.setStart(lastNode, lastNode.textContent.length);
-                } else if (lastNode && lastNode.nodeType === Node.ELEMENT_NODE) {
-                    newRange.setStartAfter(lastNode);
-                } else {
-                    newRange.selectNodeContents(currentLine);
-                    newRange.collapse(false);
-                }
-                
-                selection.removeAllRanges();
-                selection.addRange(newRange);
-            }
-        });
-        
-        // Also handle when users click at the very end of the editor
-        editor.addEventListener('click', function(event) {
-            // Small delay to let the click event complete
-            setTimeout(() => {
-                const selection = window.getSelection();
-                if (selection.rangeCount > 0) {
-                    const range = selection.getRangeAt(0);
-                    
-                    // Check all variable fields and ensure the last ones have proper spacing
-                    const variableFields = editor.querySelectorAll('.variable-field');
-                    variableFields.forEach(field => {
-                        const parent = field.parentNode;
-                        const isLastInParent = !field.nextSibling || 
-                            (field.nextSibling && field.nextSibling.nodeType === Node.TEXT_NODE && 
-                             field.nextSibling.textContent.trim() === '');
-                        
-                        if (isLastInParent) {
-                            ensureEditableSpaceAfter(field);
-                        }
-                    });
-                }
-            }, 10);
-        });
-        
-        // Also ensure proper spacing when the editor content changes
-        editor.addEventListener('input', function() {
-            // Check for variable fields at the end of lines and ensure they have space
-            const variableFields = editor.querySelectorAll('.variable-field');
-            variableFields.forEach(field => {
-                const nextSibling = field.nextSibling;
-                const parent = field.parentNode;
-                
-                // If this variable field is at the end of its line/parent, ensure space
-                if (!nextSibling || (nextSibling.nodeType === Node.TEXT_NODE && nextSibling.textContent === '')) {
-                    ensureEditableSpaceAfter(field);
-                }
-            });
-        });
     </script>
 </body>
 </html>

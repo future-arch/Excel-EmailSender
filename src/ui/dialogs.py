@@ -3,7 +3,7 @@ import webbrowser
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QLabel, QLineEdit, QPushButton, QMessageBox,
     QTextEdit, QTableWidget, QTableWidgetItem, QHeaderView, QRadioButton,
-    QButtonGroup, QCheckBox, QWidget, QHBoxLayout
+    QButtonGroup, QCheckBox, QWidget, QHBoxLayout, QAbstractItemView
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont, QGuiApplication
@@ -50,13 +50,14 @@ class VerificationDialog(QDialog):
         layout.addWidget(ok_button)
 
 class GroupSelectionDialog(QDialog):
-    def __init__(self, groups, parent=None):
+    def __init__(self, groups, parent=None, previous_selections=None, previous_sending_mode="group"):
         super().__init__(parent)
         self.setWindowTitle("选择Microsoft 365群组")
         self.setMinimumSize(700, 500)
         self.groups = groups
         self.selected_recipients = []
-        self.sending_mode = "group"  # "group" or "members"
+        self.sending_mode = previous_sending_mode  # Restore previous sending mode
+        self.previous_selections = previous_selections or []  # Store previous selections
         
         layout = QVBoxLayout(self)
         
@@ -155,6 +156,85 @@ class GroupSelectionDialog(QDialog):
         button_layout.addWidget(cancel_btn)
         
         layout.addLayout(button_layout)
+        
+        # Initialize with previous selections after UI is built
+        self._restore_previous_selections()
+    
+    def _restore_previous_selections(self):
+        """Restore previous selections and scroll to first selected group"""
+        print(f"[DEBUG] Restoring previous selections: {len(self.previous_selections)} selections")
+        print(f"[DEBUG] Previous sending mode: {self.sending_mode}")
+        
+        # Restore sending mode
+        if self.sending_mode == "members":
+            self.members_radio.setChecked(True)
+            print("[DEBUG] Set to members mode")
+        else:
+            self.group_radio.setChecked(True)
+            print("[DEBUG] Set to group mode")
+        
+        # Restore group selections
+        first_selected_row = -1
+        if self.previous_selections:
+            print(f"[DEBUG] Processing {len(self.previous_selections)} previous selections")
+            
+            # Debug: Print structure of first selection and first group
+            if self.previous_selections:
+                print(f"[DEBUG] First selection structure: {self.previous_selections[0]}")
+            if self.groups:
+                print(f"[DEBUG] First group structure: {self.groups[0]}")
+            
+            # Create multiple ways to match groups
+            for i, group in enumerate(self.groups):
+                group_id = group.get('id')
+                group_name = group.get('displayName')
+                group_email = group.get('mail')
+                
+                # Check if this group matches any previous selection
+                is_selected = False
+                for selection in self.previous_selections:
+                    # Try matching by group_id first
+                    if selection.get('group_id') == group_id:
+                        is_selected = True
+                        break
+                    # Try matching by id 
+                    elif selection.get('id') == group_id:
+                        is_selected = True
+                        break
+                    # Try matching by name
+                    elif selection.get('group_name') == group_name:
+                        is_selected = True
+                        break
+                    # Try matching by email
+                    elif selection.get('group_email') == group_email or selection.get('email') == group_email:
+                        is_selected = True
+                        break
+                
+                if is_selected:
+                    # Check this group
+                    self.group_checkboxes[i].setChecked(True)
+                    if first_selected_row == -1:
+                        first_selected_row = i
+                    print(f"[DEBUG] Restored selection for group: {group_name} (row {i})")
+        
+        # Scroll to first selected group
+        if first_selected_row >= 0:
+            # Use QTimer to delay the scroll to ensure the UI is fully rendered
+            from PySide6.QtCore import QTimer
+            QTimer.singleShot(100, lambda: self._scroll_to_row(first_selected_row))
+        else:
+            print("[DEBUG] No groups to scroll to")
+    
+    def _scroll_to_row(self, row):
+        """Scroll to the specified row"""
+        try:
+            self.group_table.scrollToItem(
+                self.group_table.item(row, 1), 
+                QAbstractItemView.ScrollHint.PositionAtCenter
+            )
+            print(f"[DEBUG] Scrolled to row {row}")
+        except Exception as e:
+            print(f"[DEBUG] Failed to scroll: {e}")
     
     def preview_recipients(self):
         """预览将要发送邮件的收件人"""
@@ -252,6 +332,7 @@ class GroupSelectionDialog(QDialog):
                         'group_name': group['displayName'],
                         'group_description': group.get('description', ''),
                         'group_email': group['mail'] or '',
+                        'group_id': group['id'],  # Add group_id for members too
                         'job_title': member.get('jobTitle', ''),
                         'department': member.get('department', ''),
                         'member_type': '成员' if not member.get('isOwner') else '所有者'

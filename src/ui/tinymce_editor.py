@@ -30,7 +30,6 @@ class TinyMCEEditor(QWidget):
         self.web_view = QWebEngineView()
         # Set height to 0.75x (reduced from previous 2x)
         self.web_view.setMinimumHeight(300)
-        self.web_view.setMaximumHeight(300)
         # Ensure web view can receive focus
         self.web_view.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         layout.addWidget(self.web_view)
