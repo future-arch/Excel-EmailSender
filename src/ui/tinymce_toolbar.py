@@ -19,29 +19,32 @@ class TinyMCEToolbar(QWidget):
         self.setup_ui()
         
     def setup_ui(self):
-        """Create the toolbar UI"""
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(6, 4, 6, 4)
-        layout.setSpacing(3)
+        """Create the toolbar UI with two rows"""
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(6, 4, 6, 4)
+        main_layout.setSpacing(2)
+        
+        # First row
+        row1_layout = QHBoxLayout()
+        row1_layout.setSpacing(3)
         
         # Undo/Redo group
-        self._add_separator(layout)
         undo_btn = self._create_button("↶", "撤销", lambda: self._exec_command("undo"))
         redo_btn = self._create_button("↷", "重做", lambda: self._exec_command("redo"))
-        layout.addWidget(undo_btn)
-        layout.addWidget(redo_btn)
+        row1_layout.addWidget(undo_btn)
+        row1_layout.addWidget(redo_btn)
+        self._add_separator_to_layout(row1_layout)
         
-        # Format group
-        self._add_separator(layout)
+        # Format dropdowns
         self.format_combo = QComboBox()
         self.format_combo.addItems(["格式", "段落", "标题 1", "标题 2", "标题 3", "标题 4", "标题 5", "标题 6", "引用", "代码块"])
         self.format_combo.currentTextChanged.connect(self._format_changed)
-        layout.addWidget(self.format_combo)
+        row1_layout.addWidget(self.format_combo)
         
         self.font_size_combo = QComboBox()
         self.font_size_combo.addItems(["字号", "10px", "12px", "14px", "16px", "18px", "24px", "32px"])
         self.font_size_combo.currentTextChanged.connect(self._font_size_changed)
-        layout.addWidget(self.font_size_combo)
+        row1_layout.addWidget(self.font_size_combo)
         
         self.font_family_combo = QComboBox()
         self.font_family_combo.addItems([
@@ -50,95 +53,109 @@ class TinyMCEToolbar(QWidget):
             "华文宋体", "华文楷体", "楷体", "仿宋"
         ])
         self.font_family_combo.currentTextChanged.connect(self._font_family_changed)
-        layout.addWidget(self.font_family_combo)
+        row1_layout.addWidget(self.font_family_combo)
+        self._add_separator_to_layout(row1_layout)
         
-        # Text formatting group
-        self._add_separator(layout)
+        # Text formatting buttons
         self.bold_btn = self._create_toggle_button("B", "粗体", lambda: self._toggle_format("bold"))
         self.italic_btn = self._create_toggle_button("I", "斜体", lambda: self._toggle_format("italic"))
         self.underline_btn = self._create_toggle_button("U", "下划线", lambda: self._toggle_format("underline"))
         self.strike_btn = self._create_toggle_button("S", "删除线", lambda: self._toggle_format("strikethrough"))
         
-        layout.addWidget(self.bold_btn)
-        layout.addWidget(self.italic_btn)
-        layout.addWidget(self.underline_btn)
-        layout.addWidget(self.strike_btn)
+        row1_layout.addWidget(self.bold_btn)
+        row1_layout.addWidget(self.italic_btn)
+        row1_layout.addWidget(self.underline_btn)
+        row1_layout.addWidget(self.strike_btn)
+        self._add_separator_to_layout(row1_layout)
         
-        # Alignment group
-        self._add_separator(layout)
+        # Alignment buttons
         left_btn = self._create_button("⫷", "左对齐", lambda: self._exec_command("justifyLeft"))
         center_btn = self._create_button("☰", "居中", lambda: self._exec_command("justifyCenter"))
         right_btn = self._create_button("⫸", "右对齐", lambda: self._exec_command("justifyRight"))
-        layout.addWidget(left_btn)
-        layout.addWidget(center_btn)
-        layout.addWidget(right_btn)
+        row1_layout.addWidget(left_btn)
+        row1_layout.addWidget(center_btn)
+        row1_layout.addWidget(right_btn)
+        self._add_separator_to_layout(row1_layout)
         
-        # List group
-        self._add_separator(layout)
+        # List buttons  
         bullet_btn = self._create_button("•", "无序列表", lambda: self._exec_command("insertUnorderedList"))
         numbered_btn = self._create_button("1.", "有序列表", lambda: self._exec_command("insertOrderedList"))
         outdent_btn = self._create_button("⇤", "减少缩进", lambda: self._exec_command("outdent"))
         indent_btn = self._create_button("⇥", "增加缩进", lambda: self._exec_command("indent"))
-        layout.addWidget(bullet_btn)
-        layout.addWidget(numbered_btn)
-        layout.addWidget(outdent_btn)
-        layout.addWidget(indent_btn)
+        row1_layout.addWidget(bullet_btn)
+        row1_layout.addWidget(numbered_btn)
+        row1_layout.addWidget(outdent_btn)
+        row1_layout.addWidget(indent_btn)
         
-        # Color group
-        self._add_separator(layout)
+        row1_layout.addStretch()
+        
+        # Second row
+        row2_layout = QHBoxLayout()
+        row2_layout.setSpacing(3)
+        
+        # Color buttons
         text_color_btn = self._create_button("A", "文字颜色", self._change_text_color)
         bg_color_btn = self._create_button("A", "背景颜色", self._change_bg_color)
         text_color_btn.setStyleSheet("color: black; font-weight: bold;")
         bg_color_btn.setStyleSheet("background-color: yellow; font-weight: bold;")
-        layout.addWidget(text_color_btn)
-        layout.addWidget(bg_color_btn)
+        row2_layout.addWidget(text_color_btn)
+        row2_layout.addWidget(bg_color_btn)
+        self._add_separator_to_layout(row2_layout)
         
-        # Insert group
-        self._add_separator(layout)
+        # Insert buttons
         link_btn = self._create_button("🔗", "插入链接", self._insert_link)
         table_btn = self._create_button("⊞", "插入表格", self._insert_table)
         hr_btn = self._create_button("—", "分隔线", lambda: self._exec_command("insertHorizontalRule"))
-        layout.addWidget(link_btn)
-        layout.addWidget(table_btn)
-        layout.addWidget(hr_btn)
+        row2_layout.addWidget(link_btn)
+        row2_layout.addWidget(table_btn)
+        row2_layout.addWidget(hr_btn)
+        self._add_separator_to_layout(row2_layout)
         
-        # Variable and utility group
-        self._add_separator(layout)
+        # Variable dropdown
         self.variable_combo = QComboBox()
         self.variable_combo.setMinimumWidth(120)
         self._setup_variable_combo()
         self.variable_combo.currentTextChanged.connect(self._insert_variable)
-        layout.addWidget(self.variable_combo)
+        row2_layout.addWidget(self.variable_combo)
+        self._add_separator_to_layout(row2_layout)
         
+        # Utility buttons
         preview_btn = self._create_button("👁", "预览邮件内容", self._toggle_preview)
         emoji_btn = self._create_button("😊", "表情", lambda: self._insert_emoji("😊"))
         clear_btn = self._create_button("Tx", "清除格式", lambda: self._exec_command("removeFormat"))
         source_btn = self._create_button("</>", "查看源码", self._toggle_source)
-        layout.addWidget(preview_btn)
-        layout.addWidget(emoji_btn)
-        layout.addWidget(clear_btn)
-        layout.addWidget(source_btn)
+        row2_layout.addWidget(preview_btn)
+        row2_layout.addWidget(emoji_btn)
+        row2_layout.addWidget(clear_btn)
+        row2_layout.addWidget(source_btn)
         
-        layout.addStretch()
+        row2_layout.addStretch()
         
-        # Set toolbar styling
+        # Add rows to main layout
+        main_layout.addLayout(row1_layout)
+        main_layout.addLayout(row2_layout)
+        
+        # Set toolbar styling for two-row layout
         self.setStyleSheet("""
             TinyMCEToolbar {
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
                     stop:0 #f8f9fa, stop:1 #f1f3f4);
                 border: 1px solid #e0e0e0;
                 border-radius: 4px;
-                padding: 2px;
+                padding: 4px 6px;
+                min-height: 60px;
+                max-height: 80px;
             }
             QPushButton, QToolButton {
                 border: 1px solid #d1d9e0;
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
                     stop:0 #ffffff, stop:1 #f6f8fa);
                 border-radius: 3px;
-                padding: 3px 5px;
+                padding: 2px 4px;
                 margin: 1px;
-                min-width: 20px;
-                min-height: 20px;
+                min-width: 22px;
+                min-height: 22px;
+                max-height: 24px;
                 font-size: 11px;
             }
             QPushButton:hover, QToolButton:hover {
@@ -158,13 +175,18 @@ class TinyMCEToolbar(QWidget):
                 border-radius: 3px;
                 padding: 2px 6px;
                 margin: 1px;
-                min-height: 20px;
+                min-height: 22px;
+                max-height: 24px;
                 font-size: 11px;
             }
             QComboBox:hover {
                 border-color: #c7d2fe;
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
                     stop:0 #f6f8fa, stop:1 #eaeef2);
+            }
+            QFrame {
+                color: #d0d7de;
+                margin: 0px 2px;
             }
         """)
         
@@ -173,7 +195,7 @@ class TinyMCEToolbar(QWidget):
         btn = QPushButton(text)
         btn.setToolTip(tooltip)
         btn.clicked.connect(callback)
-        btn.setMaximumSize(28, 26)
+        btn.setFixedSize(26, 24)
         return btn
         
     def _create_toggle_button(self, text, tooltip, callback):
@@ -183,15 +205,16 @@ class TinyMCEToolbar(QWidget):
         btn.setToolTip(tooltip)
         btn.setCheckable(True)
         btn.clicked.connect(callback)
-        btn.setMaximumSize(28, 26)
+        btn.setFixedSize(26, 24)
         return btn
         
-    def _add_separator(self, layout):
-        """Add a visual separator"""
+    def _add_separator_to_layout(self, layout):
+        """Add a visual separator to a layout"""
         separator = QFrame()
         separator.setFrameShape(QFrame.VLine)
         separator.setFrameShadow(QFrame.Sunken)
         separator.setMaximumHeight(20)
+        separator.setMaximumWidth(1)
         layout.addWidget(separator)
         
     def _setup_variable_combo(self):
@@ -333,7 +356,9 @@ class TinyMCEToolbar(QWidget):
                         stop:0 #1f2937, stop:1 #111827);
                     border: 1px solid #374151;
                     border-radius: 4px;
-                    padding: 2px;
+                    padding: 4px 6px;
+                    min-height: 60px;
+                    max-height: 80px;
                 }
                 QPushButton, QToolButton {
                     border: 1px solid #4b5563;
@@ -341,10 +366,11 @@ class TinyMCEToolbar(QWidget):
                         stop:0 #374151, stop:1 #1f2937);
                     color: #f9fafb;
                     border-radius: 3px;
-                    padding: 3px 5px;
+                    padding: 2px 4px;
                     margin: 1px;
-                    min-width: 20px;
-                    min-height: 20px;
+                    min-width: 22px;
+                    min-height: 22px;
+                    max-height: 24px;
                     font-size: 11px;
                 }
                 QPushButton:hover, QToolButton:hover {
@@ -365,11 +391,16 @@ class TinyMCEToolbar(QWidget):
                     border-radius: 3px;
                     padding: 2px 6px;
                     margin: 1px;
-                    min-height: 20px;
+                    min-height: 22px;
+                    max-height: 24px;
                     font-size: 11px;
                 }
                 QComboBox:hover {
                     border-color: #818cf8;
+                }
+                QFrame {
+                    color: #4b5563;
+                    margin: 0px 2px;
                 }
             """)
         else:
@@ -379,17 +410,20 @@ class TinyMCEToolbar(QWidget):
                         stop:0 #f8f9fa, stop:1 #f1f3f4);
                     border: 1px solid #e0e0e0;
                     border-radius: 4px;
-                    padding: 2px;
+                    padding: 4px 6px;
+                    min-height: 60px;
+                    max-height: 80px;
                 }
                 QPushButton, QToolButton {
                     border: 1px solid #d1d9e0;
                     background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
                         stop:0 #ffffff, stop:1 #f6f8fa);
                     border-radius: 3px;
-                    padding: 3px 5px;
+                    padding: 2px 4px;
                     margin: 1px;
-                    min-width: 20px;
-                    min-height: 20px;
+                    min-width: 22px;
+                    min-height: 22px;
+                    max-height: 24px;
                     font-size: 11px;
                 }
                 QPushButton:hover, QToolButton:hover {
@@ -409,12 +443,17 @@ class TinyMCEToolbar(QWidget):
                     border-radius: 3px;
                     padding: 2px 6px;
                     margin: 1px;
-                    min-height: 20px;
+                    min-height: 22px;
+                    max-height: 24px;
                     font-size: 11px;
                 }
                 QComboBox:hover {
                     border-color: #c7d2fe;
                     background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
                         stop:0 #f6f8fa, stop:1 #eaeef2);
+                }
+                QFrame {
+                    color: #d0d7de;
+                    margin: 0px 2px;
                 }
             """)
