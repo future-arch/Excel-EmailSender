@@ -1,0 +1,16 @@
+{
+  "version": "1.0.0",
+  "build": "20240815001",
+  "updated_at": "2024-08-15T00:00:00Z",
+  "update_info": {
+    "initial_release": true,
+    "features": [
+      "邮件批量发送功能",
+      "Excel数据集成",
+      "Microsoft 365群组支持",
+      "HTML模板编辑器",
+      "个性化附件支持",
+      "多种发送模式（草稿、测试、正式）"
+    ]
+  }
+}

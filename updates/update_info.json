@@ -1,0 +1,22 @@
+{
+  "version": "1.1.0",
+  "release_date": "2024-08-20",
+  "changelog": "🎉 SmartEmailSender v1.1.0 更新内容:\n\n🐛 Bug修复:\n• 修复了在某些情况下邮件发送失败的问题\n• 解决了Excel文件读取编码问题\n• 修复了群组成员显示不完整的bug\n\n✨ 新功能:\n• 添加了邮件发送历史记录\n• 支持邮件模板预览功能\n• 新增了发送进度详细显示\n• 添加了自动更新检查功能\n\n🔧 改进:\n• 优化了UI界面响应速度\n• 改进了错误提示信息\n• 增强了网络连接稳定性",
+  "download_url": [
+    "https://gitee.com/smartemailsender/app/releases/download/v1.1.0/update_1.1.0_full.zip",
+    "https://smartemailsender.oss-cn-beijing.aliyuncs.com/updates/v1.1.0/update_1.1.0_full.zip",
+    "https://github.com/smartemailsender/app/releases/download/v1.1.0/update_1.1.0_full.zip"
+  ],
+  "size": 52428800,
+  "sha256": "a1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef123456",
+  "incremental_updates": {
+    "1.0.0": {
+      "url": "https://gitee.com/smartemailsender/app/releases/download/v1.1.0/update_1.0.0_to_1.1.0_incremental.zip",
+      "size": 5242880,
+      "sha256": "b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef1234567"
+    }
+  },
+  "minimum_version": "1.0.0",
+  "recommended_action": "update",
+  "critical": false
+}
