@@ -1,0 +1,460 @@
+name: Build and Release SmartEmailSender
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., v1.0.0)'
+        required: false
+        default: 'v1.0.0'
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux
+            arch: x64
+          - os: windows-latest
+            platform: windows
+            arch: x64
+          - os: macos-latest
+            platform: macos
+            arch: x64
+          - os: macos-14
+            platform: macos
+            arch: arm64
+
+    runs-on: ${{ matrix.os }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Cache Python dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pyinstaller
+
+    - name: Install system dependencies (Ubuntu)
+      if: matrix.platform == 'linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          libegl1-mesa \
+          libxkbcommon-x11-0 \
+          libxcb-icccm4 \
+          libxcb-image0 \
+          libxcb-keysyms1 \
+          libxcb-randr0 \
+          libxcb-render-util0 \
+          libxcb-xinerama0 \
+          libxcb-xfixes0 \
+          libgl1-mesa-glx
+
+    - name: Install system dependencies (macOS)
+      if: matrix.platform == 'macos'
+      run: |
+        # 确保系统依赖完整
+        brew install --cask xquartz || true
+
+    - name: Create build directory
+      run: mkdir -p dist
+
+    - name: Build with PyInstaller (Windows)
+      if: matrix.platform == 'windows'
+      run: |
+        pyinstaller --clean ^
+          --onefile ^
+          --windowed ^
+          --name SmartEmailSender ^
+          --icon assets/SmartEmailSender.ico ^
+          --collect-all PySide6 ^
+          --collect-all shiboken6 ^
+          --hidden-import PySide6.QtWebEngineWidgets ^
+          --hidden-import PySide6.QtWebEngineCore ^
+          --add-data "assets;assets" ^
+          --add-data ".env.template;." ^
+          src/SmartEmailSender.py
+
+    - name: Build with PyInstaller (macOS/Linux)
+      if: matrix.platform != 'windows'
+      run: |
+        pyinstaller --clean \
+          --onefile \
+          --windowed \
+          --name SmartEmailSender \
+          --icon assets/SmartEmailSender.icns \
+          --collect-all PySide6 \
+          --collect-all shiboken6 \
+          --hidden-import PySide6.QtWebEngineWidgets \
+          --hidden-import PySide6.QtWebEngineCore \
+          --add-data "assets:assets" \
+          --add-data ".env.template:." \
+          src/SmartEmailSender.py
+
+    - name: Create application bundle (macOS)
+      if: matrix.platform == 'macos'
+      run: |
+        # 创建 .app 包结构
+        mkdir -p "SmartEmailSender.app/Contents/MacOS"
+        mkdir -p "SmartEmailSender.app/Contents/Resources"
+        
+        # 复制可执行文件
+        cp dist/SmartEmailSender "SmartEmailSender.app/Contents/MacOS/"
+        
+        # 复制图标
+        cp assets/SmartEmailSender.icns "SmartEmailSender.app/Contents/Resources/"
+        
+        # 创建 Info.plist
+        cat > "SmartEmailSender.app/Contents/Info.plist" << EOF
+        <?xml version="1.0" encoding="UTF-8"?>
+        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+        <plist version="1.0">
+        <dict>
+            <key>CFBundleExecutable</key>
+            <string>SmartEmailSender</string>
+            <key>CFBundleIconFile</key>
+            <string>SmartEmailSender.icns</string>
+            <key>CFBundleIdentifier</key>
+            <string>com.company.smartemailsender</string>
+            <key>CFBundleName</key>
+            <string>SmartEmailSender</string>
+            <key>CFBundlePackageType</key>
+            <string>APPL</string>
+            <key>CFBundleShortVersionString</key>
+            <string>1.0.0</string>
+            <key>CFBundleVersion</key>
+            <string>1.0.0</string>
+            <key>LSMinimumSystemVersion</key>
+            <string>10.14</string>
+            <key>NSHighResolutionCapable</key>
+            <true/>
+            <key>NSRequiresAquaSystemAppearance</key>
+            <false/>
+        </dict>
+        </plist>
+        EOF
+
+    - name: Copy support tools to dist
+      run: |
+        # 复制支持工具
+        cp SmartEmailSender_应急方案.py dist/ || echo "应急方案文件不存在"
+        cp src/diagnostic_tool.py dist/ || echo "诊断工具文件不存在"
+        cp src/remote_support.py dist/ || echo "远程支持工具文件不存在"
+        cp src/log_collector.py dist/ || echo "日志收集器文件不存在"
+
+    - name: Create startup scripts
+      run: |
+        # Windows 启动脚本
+        if [ "${{ matrix.platform }}" = "windows" ]; then
+          cat > dist/启动程序.bat << 'EOF'
+        @echo off
+        cd /d "%~dp0"
+        echo 🚀 SmartEmailSender 启动器
+        echo ================================
+        
+        if not exist ".env" (
+            echo 首次运行，请输入配置信息...
+            set /p CLIENT_ID="Azure Client ID [b4741145-b380-4162-b6f8-53905c8068ec]: "
+            set /p TENANT_ID="Azure Tenant ID [193a8985-443f-4477-92f3-2fb3a199095f]: "
+            set /p TEST_EMAIL="测试邮箱地址: "
+            
+            if "%CLIENT_ID%"=="" set CLIENT_ID=b4741145-b380-4162-b6f8-53905c8068ec
+            if "%TENANT_ID%"=="" set TENANT_ID=193a8985-443f-4477-92f3-2fb3a199095f
+            
+            echo AZURE_CLIENT_ID=%CLIENT_ID%> .env
+            echo AZURE_TENANT_ID=%TENANT_ID%>> .env
+            echo TEST_SELF_EMAIL=%TEST_EMAIL%>> .env
+            
+            echo ✅ 配置已保存！
+        )
+        
+        echo 🔧 正在启动 SmartEmailSender...
+        SmartEmailSender.exe
+        
+        if errorlevel 1 (
+            echo ⚠️ 主程序启动失败，尝试应急版本...
+            if exist "SmartEmailSender_应急方案.py" (
+                python "SmartEmailSender_应急方案.py"
+            ) else (
+                echo ❌ 应急版本不可用，请联系IT部门
+                pause
+            )
+        )
+        EOF
+        fi
+        
+        # macOS/Linux 启动脚本
+        if [ "${{ matrix.platform }}" != "windows" ]; then
+          cat > dist/启动程序.sh << 'EOF'
+        #!/bin/bash
+        cd "$(dirname "$0")"
+        
+        echo "🚀 SmartEmailSender 启动器"
+        echo "================================"
+        
+        if [ ! -f ".env" ]; then
+            echo "首次运行，请输入配置信息..."
+            read -p "Azure Client ID [b4741145-b380-4162-b6f8-53905c8068ec]: " CLIENT_ID
+            read -p "Azure Tenant ID [193a8985-443f-4477-92f3-2fb3a199095f]: " TENANT_ID
+            read -p "测试邮箱地址: " TEST_EMAIL
+            
+            CLIENT_ID=${CLIENT_ID:-b4741145-b380-4162-b6f8-53905c8068ec}
+            TENANT_ID=${TENANT_ID:-193a8985-443f-4477-92f3-2fb3a199095f}
+            
+            cat > .env << ENVEOF
+        AZURE_CLIENT_ID=$CLIENT_ID
+        AZURE_TENANT_ID=$TENANT_ID
+        TEST_SELF_EMAIL=$TEST_EMAIL
+        ENVEOF
+            echo "✅ 配置已保存！"
+        fi
+        
+        echo "🔧 正在启动 SmartEmailSender..."
+        
+        if [ "${{ matrix.platform }}" = "macos" ]; then
+            if [ -d "SmartEmailSender.app" ]; then
+                open SmartEmailSender.app
+            else
+                ./SmartEmailSender
+            fi
+        else
+            ./SmartEmailSender
+        fi
+        
+        if [ $? -ne 0 ] && [ -f "SmartEmailSender_应急方案.py" ]; then
+            echo "⚠️ 主程序启动失败，启动应急版本..."
+            python3 "SmartEmailSender_应急方案.py"
+        fi
+        EOF
+          chmod +x dist/启动程序.sh
+        fi
+
+    - name: Create README and documentation
+      run: |
+        cat > dist/README.md << 'EOF'
+        # SmartEmailSender
+        
+        专业的批量邮件发送工具，支持Excel数据导入和Microsoft 365集成。
+        
+        ## 快速开始
+        
+        ### Windows用户
+        双击 `启动程序.bat`
+        
+        ### macOS用户
+        双击 `启动程序.sh` 或拖拽 `SmartEmailSender.app` 到应用程序文件夹
+        
+        ### Linux用户
+        运行 `./启动程序.sh`
+        
+        ## 首次配置
+        - 程序会自动提示输入Azure配置信息
+        - 默认值已预设组织配置
+        - 只需输入您的测试邮箱地址
+        
+        ## 故障处理
+        - 主程序无法启动时会自动切换到应急版本
+        - 运行 `diagnostic_tool.py` 进行系统诊断
+        - 运行 `remote_support.py` 生成技术支持包
+        
+        ## 技术支持
+        如遇问题请联系IT部门并提供诊断报告。
+        EOF
+        
+        # 创建安装说明
+        cat > dist/安装说明.txt << 'EOF'
+        SmartEmailSender 安装说明
+        =========================
+        
+        📦 系统要求：
+        - Windows 10+ / macOS 10.14+ / Ubuntu 18.04+
+        - 网络连接（用于Azure AD认证）
+        
+        🚀 安装步骤：
+        1. 解压所有文件到任意目录
+        2. 双击启动脚本开始使用
+        3. 首次运行时按提示配置
+        
+        ⚠️ 注意事项：
+        - 请勿移动或删除任何文件
+        - 确保网络连接正常
+        - macOS可能需要在安全性设置中允许运行
+        
+        🔧 故障处理：
+        - 查看 README.md 了解详细使用方法
+        - 运行诊断工具检查问题
+        - 联系IT部门获得技术支持
+        EOF
+
+    - name: Package artifacts (Windows)
+      if: matrix.platform == 'windows'
+      run: |
+        # 创建Windows安装包目录
+        mkdir -p SmartEmailSender-Windows-${{ matrix.arch }}
+        cp -r dist/* SmartEmailSender-Windows-${{ matrix.arch }}/
+        
+        # 创建ZIP包
+        powershell Compress-Archive -Path SmartEmailSender-Windows-${{ matrix.arch }} -DestinationPath SmartEmailSender-Windows-${{ matrix.arch }}.zip
+
+    - name: Package artifacts (macOS)
+      if: matrix.platform == 'macos'
+      run: |
+        # 创建macOS包目录
+        mkdir -p SmartEmailSender-macOS-${{ matrix.arch }}
+        cp -r dist/* SmartEmailSender-macOS-${{ matrix.arch }}/
+        
+        # 移动 .app 到包目录
+        if [ -d "SmartEmailSender.app" ]; then
+          mv SmartEmailSender.app SmartEmailSender-macOS-${{ matrix.arch }}/
+        fi
+        
+        # 创建DMG（简化版本，使用zip）
+        zip -r SmartEmailSender-macOS-${{ matrix.arch }}.zip SmartEmailSender-macOS-${{ matrix.arch }}
+
+    - name: Package artifacts (Linux)
+      if: matrix.platform == 'linux'
+      run: |
+        # 创建Linux包目录
+        mkdir -p SmartEmailSender-Linux-${{ matrix.arch }}
+        cp -r dist/* SmartEmailSender-Linux-${{ matrix.arch }}/
+        
+        # 创建tar.gz包
+        tar -czf SmartEmailSender-Linux-${{ matrix.arch }}.tar.gz SmartEmailSender-Linux-${{ matrix.arch }}
+
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: SmartEmailSender-${{ matrix.platform }}-${{ matrix.arch }}
+        path: |
+          SmartEmailSender-*.zip
+          SmartEmailSender-*.tar.gz
+        retention-days: 30
+
+  test:
+    needs: build
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest pytest-qt
+        
+    - name: Run tests
+      run: |
+        # 运行基本导入测试
+        python -c "
+        try:
+            import sys
+            sys.path.insert(0, 'src')
+            
+            # 测试核心模块导入
+            from graph.auth import GraphAuth
+            from graph.api import GraphAPI
+            print('✅ 核心模块导入成功')
+            
+            # 测试应急版本
+            exec(open('SmartEmailSender_应急方案.py').read().replace('if __name__', 'if False and __name__'))
+            print('✅ 应急版本语法检查通过')
+            
+            # 测试支持工具
+            if os.path.exists('src/diagnostic_tool.py'):
+                exec(open('src/diagnostic_tool.py').read().replace('if __name__', 'if False and __name__'))
+                print('✅ 诊断工具语法检查通过')
+                
+        except Exception as e:
+            print(f'❌ 测试失败: {e}')
+            sys.exit(1)
+        "
+
+  release:
+    needs: [build, test]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Download all artifacts
+      uses: actions/download-artifact@v3
+      with:
+        path: artifacts
+        
+    - name: Create release notes
+      run: |
+        cat > release_notes.md << 'EOF'
+        # SmartEmailSender Release
+        
+        ## 🚀 新特性
+        - 专业批量邮件发送工具
+        - Excel数据导入支持
+        - Microsoft 365 Groups集成
+        - 富文本邮件编辑
+        - 附件支持（通用和个性化）
+        - Azure AD安全认证
+        
+        ## 🔧 技术支持
+        - 完整的故障诊断工具
+        - 应急备用方案
+        - 远程技术支持包生成
+        - 详细的故障处理指南
+        
+        ## 📦 支持平台
+        - Windows 10+ (x64)
+        - macOS 10.14+ (x64, Apple Silicon)
+        - Linux Ubuntu 18.04+ (x64)
+        
+        ## 🎯 使用方法
+        1. 下载对应平台的安装包
+        2. 解压到任意目录
+        3. 双击启动脚本
+        4. 按提示完成配置
+        
+        ## ⚠️ 注意事项
+        - 首次运行需要网络连接进行Azure AD认证
+        - macOS用户可能需要在安全设置中允许运行
+        - 如遇问题请运行诊断工具或联系IT部门
+        EOF
+        
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: artifacts/**/*
+        body_path: release_notes.md
+        draft: false
+        prerelease: false
+        generate_release_notes: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,24 @@
+# Project Guidelines for Claude Code
+
+## File Editing Rules
+- Always read entire files before editing
+- Use 4 spaces for Python indentation
+- Match exact whitespace and formatting
+- If edit fails, re-read file and try again
+- Show planned changes before applying
+
+## Project Preferences
+- Prefer editing existing files over creating new ones
+- Never create documentation files unless explicitly requested
+- Keep responses concise and direct
+- Use TodoWrite tool for complex multi-step tasks
+
+## Code Style
+- Follow existing code conventions in the project
+- No comments unless explicitly requested
+- Match library and framework choices used in codebase
+- Security best practices always
+
+## Chinese Language Support
+- Support Chinese text and comments when present in codebase
+- Maintain existing language patterns in files
